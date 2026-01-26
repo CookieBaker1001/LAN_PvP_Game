@@ -1,15 +1,10 @@
 package com.springer.knakobrak.net;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class GameClient {
@@ -19,7 +14,6 @@ public class GameClient {
     private PrintWriter out;
 
     private final Queue<String> incoming = new ConcurrentLinkedQueue<>();
-    private Thread listenerThread;
     private volatile boolean connected;
 
     String host;
@@ -47,7 +41,7 @@ public class GameClient {
     }
 
     private void startListenerThread() {
-        listenerThread = new Thread(() -> {
+        Thread listenerThread = new Thread(() -> {
             try {
                 String line;
                 while ((line = in.readLine()) != null) {
@@ -82,31 +76,3 @@ public class GameClient {
         return connected;
     }
 }
-
-
-
-
-//public class GameClient {
-//    private java.net.Socket socket;
-//    private java.io.ObjectOutputStream out;
-//    private java.io.ObjectInputStream in;
-//
-//    public GameClient(String host, int port) throws Exception {
-//        socket = new java.net.Socket(host, port);
-//        out = new java.io.ObjectOutputStream(socket.getOutputStream());
-//        in = new java.io.ObjectInputStream(socket.getInputStream());
-//    }
-//
-//    public void sendInput(float dx, float dy, boolean shooting) throws Exception {
-//        InputMessage msg = new InputMessage();
-//        msg.dx = dx;
-//        msg.dy = dy;
-//        msg.shooting = shooting;
-//        out.writeObject(msg);
-//        out.flush();
-//    }
-//
-//    public WorldStateMessage readWorld() throws Exception {
-//        return (WorldStateMessage) in.readObject();
-//    }
-//}

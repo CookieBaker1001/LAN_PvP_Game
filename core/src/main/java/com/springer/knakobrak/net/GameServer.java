@@ -1,7 +1,5 @@
 package com.springer.knakobrak.net;
 
-import com.springer.knakobrak.world.PlayerState;
-
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -26,6 +24,14 @@ public class GameServer implements Runnable {
         this.serverSocket = new ServerSocket(port);
     }
 
+    enum ServerState {
+        LOBBY,
+        GAME,
+        SHUTDOWN
+    }
+
+    volatile ServerState serverState = ServerState.LOBBY;
+
     @Override
     public void run() {
         try {
@@ -35,10 +41,10 @@ public class GameServer implements Runnable {
                 Socket socket = serverSocket.accept();
                 ClientHandler client = new ClientHandler(socket);
                 new Thread(client).start();
-//                if (host == null) {
-//                    host = client;
-//                    System.out.println("Host connected.");
-//                } else System.out.println("New client connected");
+                if (host == null) {
+                    host = client;
+                    System.out.println("Host connected.");
+                } else System.out.println("New client connected");
             }
         } catch (IOException e) {
             if (running) {
@@ -54,24 +60,10 @@ public class GameServer implements Runnable {
         running = false;
         clients.values().forEach(ClientHandler::disconnect);
         clients.clear();
+        host = null;
         try {
             serverSocket.close();
         } catch (IOException ignored) {}
-//        try {
-//            if (serverSocket != null && !serverSocket.isClosed()) {
-//                serverSocket.close();
-//            }
-//        } catch (IOException ignored) {}
-//        List<ClientHandler> snapshot;
-//        synchronized (clients) {
-//            snapshot = new ArrayList<>(clients.values());
-//        }
-//        for (ClientHandler client : snapshot) {
-//            client.out.println("Server is shutting down.");
-//            client.disconnect();
-//        }
-//        host = null;
-//        clients.clear();
     }
 
     private void broadcast(String msg) {
@@ -81,25 +73,12 @@ public class GameServer implements Runnable {
     private void broadcastPlayerList() {
         StringBuilder sb = new StringBuilder("PLAYER_LIST ");
         for (ClientHandler c : clients.values()) {
-            sb.append(c.id).append(":").append(c.name).append(" ");
+            sb.append(c.id).append(":").append(c.name);
+            if (c.isHost) sb.append(" (HOST)");
+            sb.append("_");
         }
         broadcast(sb.toString());
     }
-
-//    private void broadcast(String msg, ClientHandler from) {
-//        synchronized (clients) {
-//            broadcastRaw(msg, from);
-//        }
-//        System.out.println(msg);
-//    }
-//
-//    private static void broadcastRaw(String message, ClientHandler from) {
-//        for (ClientHandler client : clients.values()) {
-////            if (from == null) client.out.println(message);
-////            else if (client != from) client.out.println(message);
-//            client.out.println(message);
-//        }
-//    }
 
     private class ClientHandler implements Runnable {
 
@@ -109,6 +88,8 @@ public class GameServer implements Runnable {
         private BufferedReader in;
         private PrintWriter out;
         private boolean isHost;
+
+        PlayerState playerState;
 
         ClientHandler(Socket socket) throws IOException {
             this.socket = socket;
@@ -120,7 +101,13 @@ public class GameServer implements Runnable {
         public void run() {
             try {
                 handshake();
-                lobbyLoop();
+                while (serverState != ServerState.SHUTDOWN) {
+                    if (serverState == ServerState.LOBBY) {
+                        lobbyLoop();
+                    } else if (serverState == ServerState.GAME) {
+                        gameLoop();
+                    }
+                }
             } catch (IOException ignored) {
             } finally {
                 disconnect();
@@ -128,10 +115,13 @@ public class GameServer implements Runnable {
         }
 
         private void handshake() throws IOException {
-            out.println("ENTER_NAME");
+            //out.println("ENTER_NAME");
             name = in.readLine();
             id = nextId.getAndIncrement();
-            if (clients.isEmpty()) host = this;
+            if (clients.isEmpty()) {
+                host = this;
+                host.isHost = true;
+            }
             clients.put(id, this);
             out.println("ASSIGNED_ID " + id);
             broadcastPlayerList();
@@ -139,12 +129,28 @@ public class GameServer implements Runnable {
 
         private void lobbyLoop() throws IOException {
             String line;
-            while ((line = in.readLine()) != null) {
+            while (serverState == ServerState.LOBBY && (line = in.readLine()) != null) {
                 if (line.equals("QUIT")) {
                     break;
                 }
                 if (line.equals("START_GAME") && this == host) {
+                    serverState = ServerState.GAME;
+                    spawnPlayers();
+                    broadcastGameState();
                     broadcast("GAME_START");
+                }
+            }
+        }
+
+        private void gameLoop() throws IOException {
+            String line;
+            while (serverState == ServerState.GAME && (line = in.readLine()) != null) {
+                if (line.equals("QUIT")) {
+                    return;
+                }
+                if (line.startsWith("MOVE")) {
+                    //handleMove(line);
+                    broadcastGameState();
                 }
             }
         }
@@ -154,11 +160,40 @@ public class GameServer implements Runnable {
             broadcastPlayerList();
             if (this == host) {
                 broadcast("HOST_LEFT");
+                serverState = ServerState.SHUTDOWN;
                 shutdown();
             }
             try {
                 socket.close();
             } catch (IOException ignored) {}
         }
+    }
+
+    private void broadcastGameState() {
+        StringBuilder sb = new StringBuilder("STATE");
+        for (ClientHandler c : clients.values()) {
+            PlayerState s = c.playerState;
+            sb.append(" ")
+                .append(s.id).append(":")
+                .append(s.x).append(":")
+                .append(s.y);
+        }
+        broadcast(sb.toString());
+    }
+
+    private void spawnPlayers() {
+        int i = 0;
+        for (ClientHandler c : clients.values()) {
+            c.playerState = new PlayerState();
+            c.playerState.id = c.id;
+            c.playerState.x = 100 + i * 80;
+            c.playerState.y = 200;
+            i++;
+        }
+    }
+
+    static class PlayerState {
+        int id;
+        float x, y;
     }
 }

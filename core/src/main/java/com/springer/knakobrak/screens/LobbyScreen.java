@@ -5,19 +5,12 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.scenes.scene2d.Actor;
-import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
-import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
-import com.springer.knakobrak.net.GameClient;
-import com.springer.knakobrak.net.GameServer;
-
-import javax.swing.event.ChangeEvent;
-import java.io.IOException;
 
 public class LobbyScreen implements Screen {
 
@@ -148,7 +141,7 @@ public class LobbyScreen implements Screen {
         } else if (msg.startsWith("PLAYER_LIST")) {
             updatePlayerList(msg);
         } else if (msg.equals("GAME_START")) {
-            game.setScreen(new GameScreen(game.client));
+            game.setScreen(new GameScreen(game));
         } else if (msg.equals("HOST_LEFT")) {
             game.cleanupNetworking();
             game.setScreen(new MainMenuScreen(game));
@@ -157,10 +150,9 @@ public class LobbyScreen implements Screen {
 
     private void updatePlayerList(String msg) {
         // Update player list UI
-        String[] parts = msg.split(" ");
-
+        System.out.println("Received player list: " + msg);
+        String[] parts = msg.split("_");
         Array<String> names = new Array<>();
-
         for (int i = 1; i < parts.length; i++) {
             String entry = parts[i]; // "1:Alice"
             String[] pair = entry.split(":");
@@ -169,24 +161,7 @@ public class LobbyScreen implements Screen {
                 names.add(name);
             }
         }
-        System.out.println("Updating player list: " + names);
+        System.out.println("Updated player list: " + names);
         playerListUI.setItems(names);
-
-//        if (parts.length < 2) return;
-//        String playerListStr = parts[1];
-//        // Assuming playerList is a TextField defined in show()
-//        for (Actor actor : stage.getActors()) {
-//            if (actor instanceof Table) {
-//                Table table = (Table) actor;
-//                for (Actor tableActor : table.getChildren()) {
-//                    if (tableActor instanceof TextArea) {
-//                        TextArea playerList = (TextArea) tableActor;
-//                        playerList.setText(playerListStr.replace(" ", "\n"));
-//                        System.out.println("Updated player list: " + playerListStr);
-//                        return;
-//                    }
-//                }
-//            }
-//        }
     }
 }
