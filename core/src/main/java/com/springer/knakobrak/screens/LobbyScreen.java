@@ -39,14 +39,14 @@ public class LobbyScreen implements Screen {
         playerListUI = new List<>(game.uiSkin);
         playerScrollPane = new ScrollPane(playerListUI, game.uiSkin);
 
-        Label title = new Label("Lobby", game.uiSkin);
-        title.setFontScale(1.5f);
-
         rootTable = new Table();
         rootTable.setFillParent(true);
         stage.addActor(rootTable);
 
         rootTable.pad(20);
+
+        Label title = new Label("Lobby", game.uiSkin);
+        title.setFontScale(1.5f);
 
         rootTable.add(title).colspan(2).padBottom(20);
         rootTable.row();

@@ -53,17 +53,7 @@ public class GameScreen implements Screen {
         // 3. Receive WorldStateMessage
         // 4. Draw circles
 
-        float speed = movementSpeed * delta;
-        float dx = 0, dy = 0;
-
-        if (Gdx.input.isKeyPressed(Input.Keys.W)) dy += speed;
-        if (Gdx.input.isKeyPressed(Input.Keys.S)) dy -= speed;
-        if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= speed;
-        if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += speed;
-
-        if (dx != 0 || dy != 0) {
-            game.client.send("MOVE " + dx + " " + dy);
-        }
+        handleInput(delta);
 
         //ScreenUtils.clear(Color.BLACK);
 
@@ -90,6 +80,19 @@ public class GameScreen implements Screen {
 
         stage.act(delta);
         stage.draw();
+    }
+
+    private void handleInput(float delta) {
+        float dx = 0, dy = 0;
+
+        if (Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
+
+        if (dx != 0 || dy != 0) {
+            game.client.send("MOVE " + dx + " " + dy + " " + (movementSpeed * delta));
+        }
     }
 
     @Override

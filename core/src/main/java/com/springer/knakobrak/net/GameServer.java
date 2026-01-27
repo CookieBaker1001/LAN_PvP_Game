@@ -149,7 +149,16 @@ public class GameServer implements Runnable {
                     return;
                 }
                 if (line.startsWith("MOVE")) {
-                    //handleMove(line);
+                    String[] parts = line.split(" ");
+                    float dx = Float.parseFloat(parts[1]);
+                    float dy = Float.parseFloat(parts[2]);
+                    float SPEED = Float.parseFloat(parts[3]);
+
+//                    Player p = players.get(this);
+//                    p.x += dx * SPEED;
+//                    p.y += dy * SPEED;
+                    playerState.x += dx * SPEED;
+                    playerState.y += dy * SPEED;
                     broadcastGameState();
                 }
             }

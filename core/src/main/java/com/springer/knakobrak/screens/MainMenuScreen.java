@@ -46,6 +46,12 @@ public class MainMenuScreen implements Screen {
 
         table.pad(20);
 
+        Label title = new Label("Pvp Game", game.uiSkin);
+        title.setFontScale(1.5f);
+
+        table.add(title).colspan(2).padBottom(20);
+        table.row();
+
         Label nameLabel = new Label("Name:", game.uiSkin);
         table.add(nameLabel).pad(20);
         TextField nameInput = new TextField(game.username, game.uiSkin);
