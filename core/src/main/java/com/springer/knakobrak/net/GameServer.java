@@ -22,6 +22,7 @@ public class GameServer implements Runnable {
 
     private ClientHandler host;
     private static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
+    private static Map<Integer, PlayerState> playerStates = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(1);
 
     private List<ProjectileState> projectiles = new ArrayList<>();
@@ -83,6 +84,7 @@ public class GameServer implements Runnable {
             this.socket = socket;
             in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+            this.playerState = new PlayerState();
         }
 
         @Override
@@ -100,16 +102,17 @@ public class GameServer implements Runnable {
         }
 
         private void handshake() throws IOException {
-            //out.println("ENTER_NAME");
             name = in.readLine();
             id = nextId.getAndIncrement();
             if (clients.isEmpty()) {
                 host = this;
                 host.isHost = true;
             }
-            Color color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
+            this.playerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
             clients.put(id, this);
-            out.println("ASSIGNED_ID " + id + " " + color.r + " " + color.g + " " + color.b);
+            playerStates.put(id, this.playerState);
+            //out.println("ASSIGNED_ID " + id + " " + color.r + " " + color.g + " " + color.b);
+            out.println("ASSIGNED_ID " + id);
             broadcastPlayerList();
         }
 
@@ -120,6 +123,7 @@ public class GameServer implements Runnable {
 
         private void disconnect() {
             clients.remove(id);
+            playerStates.remove(id);
             if (this == host) {
                 broadcast("HOST_LEFT");
                 serverState = ServerState.SHUTDOWN;
@@ -162,11 +166,25 @@ public class GameServer implements Runnable {
                 if (line.equals("START_GAME") && c == host) {
                     serverState = ServerState.GAME;
                     spawnPlayers();
+                    //broadcastStartGame();
                     broadcast("GAME_START");
                     System.out.println("Game started by host.");
                 }
             }
         }
+    }
+
+    private void broadcastStartGame() {
+        StringBuilder sb = new StringBuilder("GAME_START");
+        for (PlayerState p : playerStates.values()) {
+            System.out.println("Player " + p.id + " has color: " + p.color);
+            sb.append(" ").append(p.id).append(":")
+                .append(p.color.r).append(":")
+                .append(p.color.g).append(":")
+                .append(p.color.b);
+        }
+        System.out.println(sb);
+        broadcast(sb.toString());
     }
 
     private void processGameInputs() {
@@ -187,7 +205,7 @@ public class GameServer implements Runnable {
                     float dy = Float.parseFloat(p[2]);
                     ProjectileState proj = new ProjectileState();
                     proj.id = nextProjectileId++;
-                    proj.ownerId = c.id;
+                    //proj.ownerId = c.id;
                     proj.x = c.playerState.x + dx * 20;
                     proj.y = c.playerState.y + dy * 20;
                     proj.vx = dx * 400;
@@ -231,16 +249,19 @@ public class GameServer implements Runnable {
             sb.append(" ")
                 .append(s.id).append(":")
                 .append(s.x).append(":")
-                .append(s.y);
+                .append(s.y).append(":")
+                .append(s.color.r).append(":")
+                .append(s.color.g).append(":")
+                .append(s.color.b);
         }
         sb.append(" PR");
         for (ProjectileState p : projectiles) {
             sb.append(" ");
-            sb.append(p.ownerId).append(":")
+            sb.append(p.id).append(":")
                 .append(p.x).append(":")
-                .append(p.y).append(":")
-                .append(p.vx).append(":")
-                .append(p.vy);
+                .append(p.y);//.append(":")
+                //.append(p.vx).append(":")
+                //.append(p.vy);
         }
         broadcast(sb.toString());
     }
@@ -252,6 +273,7 @@ public class GameServer implements Runnable {
             c.playerState.id = c.id;
             c.playerState.x = 100 + i * 80;
             c.playerState.y = 200;
+            c.playerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
             i++;
         }
     }
@@ -260,6 +282,7 @@ public class GameServer implements Runnable {
         running = false;
         clients.values().forEach(ClientHandler::disconnect);
         clients.clear();
+        playerStates.clear();
         host = null;
         try {
             serverSocket.close();

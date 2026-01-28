@@ -33,7 +33,7 @@ public class GameScreen implements Screen {
     private SpriteBatch batch;
     private Texture background;
 
-    Map<Integer, PlayerState> players = new HashMap<>();
+    public Map<Integer, PlayerState> players = new HashMap<>();
     ShapeRenderer shapeRenderer = new ShapeRenderer();
 
     Map<Integer, ProjectileState> projectiles = new HashMap<>();
@@ -44,7 +44,6 @@ public class GameScreen implements Screen {
     int movementSpeed = 200;
     float positionX = 100;
     float positionY = 100;
-    Vector2 touchPos = new Vector2();
 
     public GameScreen(LanPvpGame game) {
         this.game = game;
@@ -225,6 +224,9 @@ public class GameScreen implements Screen {
             int id = Integer.parseInt(data[0]);
             float x = Float.parseFloat(data[1]);
             float y = Float.parseFloat(data[2]);
+            float r = Float.parseFloat(data[3]);
+            float g = Float.parseFloat(data[4]);
+            float b = Float.parseFloat(data[5]);
             PlayerState p = players.get(id);
             if (p == null) {
                 p = new PlayerState();
@@ -233,6 +235,9 @@ public class GameScreen implements Screen {
             }
             p.x = x;
             p.y = y;
+            p.color.r = r;
+            p.color.g = g;
+            p.color.b = b;
             i++;
         }
 
@@ -247,7 +252,7 @@ public class GameScreen implements Screen {
                 float y = Float.parseFloat(data[2]);
 
                 ProjectileState p = new ProjectileState();
-                p.ownerId = id;
+                p.id = id;
                 p.x = x;
                 p.y = y;
 
@@ -255,38 +260,5 @@ public class GameScreen implements Screen {
                 i++;
             }
         }
-
-//        System.out.println("Received game state: " + msg);
-//        String[] parts = msg.split(" ");
-//        for (int i = 1; i < parts.length; i++) {
-//            System.out.println("Processing part: " + parts[i]);
-//            String[] data = parts[i].split(":");
-//            int id = Integer.parseInt(data[0]);
-//            float x = Float.parseFloat(data[1]);
-//            float y = Float.parseFloat(data[2]);
-//
-//            PlayerState p = players.get(id);
-//            if (p == null) {
-//                p = new PlayerState();
-//                p.id = id;
-//                players.put(id, p);
-//            }
-//            if (id == game.clientId) {
-//                positionX = x;
-//                positionY = y;
-//            }
-//            p.x = x;
-//            p.y = y;
-//        }
-//
-//        projectiles.clear();
-//
-//        for (...) {
-//            ProjectileState p = new ProjectileState();
-//            p.ownerId = id;
-//            p.x = x;
-//            p.y = y;
-//            projectiles.put(id, p);
-//        }
     }
 }

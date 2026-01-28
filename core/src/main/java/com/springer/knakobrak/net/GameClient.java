@@ -1,5 +1,7 @@
 package com.springer.knakobrak.net;
 
+import com.badlogic.gdx.graphics.Color;
+
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;

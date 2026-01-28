@@ -12,6 +12,12 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.world.PlayerState;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class LobbyScreen implements Screen {
 
@@ -27,6 +33,7 @@ public class LobbyScreen implements Screen {
 
     public LobbyScreen(LanPvpGame game, boolean isHost) {
         this.game = game;
+        //game.players.clear();
         this.isHost = isHost;
         this.background = new Texture("final_frontier.jpg");
         //this.background = new Texture("libgdx.png");
@@ -141,11 +148,24 @@ public class LobbyScreen implements Screen {
         if (msg.startsWith("ASSIGNED_ID")) {
             String[] data = msg.split(" ");
             game.clientId = Integer.parseInt(data[1]);
-            game.playerColor = new Color(Float.parseFloat(data[2]), Float.parseFloat(data[3]), Float.parseFloat(data[4]), 1);
-            System.out.println("Assigned ID: " + game.clientId + " Color: " + game.playerColor);
+            //game.playerColor = new Color(Float.parseFloat(data[2]), Float.parseFloat(data[3]), Float.parseFloat(data[4]), 1);
+            System.out.println("Assigned ID: " + game.clientId);
         } else if (msg.startsWith("PLAYER_LIST")) {
             updatePlayerList(msg);
         } else if (msg.equals("GAME_START")) {
+            // Assigns color to players
+//            String[] parts = msg.split(" ");
+//            for (int i = 1; i < parts.length; i++) {
+//                String[] data = parts[i].split(":");
+//                int id = Integer.parseInt(data[0]);
+//                float r = Float.parseFloat(data[1]);
+//                float g = Float.parseFloat(data[2]);
+//                float b = Float.parseFloat(data[3]);
+//                PlayerState p = game.players.get(id);
+//                if (p != null) {
+//                    p.color = new Color(r, g, b, 1);
+//                }
+//            }
             game.setScreen(new GameScreen(game));
         } else if (msg.equals("HOST_LEFT")) {
             game.cleanupNetworking();

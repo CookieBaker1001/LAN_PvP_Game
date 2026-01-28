@@ -10,6 +10,10 @@ import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
 import com.springer.knakobrak.screens.LobbyScreen;
 import com.springer.knakobrak.screens.MainMenuScreen;
+import com.springer.knakobrak.world.PlayerState;
+
+import java.util.HashMap;
+import java.util.Map;
 
 
 public class LanPvpGame extends Game {
@@ -23,7 +27,7 @@ public class LanPvpGame extends Game {
 
     public boolean inChat;
     public String username = "UNNAMED";
-    public Color playerColor = Color.WHITE;
+    //public Color playerColor = Color.WHITE;
     public int clientId;
     public int port = 5000;
 
