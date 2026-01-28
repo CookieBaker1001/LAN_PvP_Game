@@ -2,6 +2,7 @@ package com.springer.knakobrak;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.viewport.FitViewport;
@@ -22,11 +23,17 @@ public class LanPvpGame extends Game {
 
     public boolean inChat;
     public String username = "UNNAMED";
+    public Color playerColor = Color.WHITE;
     public int clientId;
     public int port = 5000;
 
+    public float worldWidth;
+    public float worldHeight;
+
     @Override
     public void create() {
+        worldWidth = Gdx.graphics.getWidth();
+        worldHeight = Gdx.graphics.getHeight();
         batch = new SpriteBatch();
 //        image = new Texture("libgdx.png");
 
@@ -34,7 +41,8 @@ public class LanPvpGame extends Game {
         //uiSkin = new Skin(Gdx.files.internal("ui/metal/metal-ui.json"));
         uiSkin = new Skin(Gdx.files.internal("ui/clean-crispy/clean-crispy-ui.json"));
 
-        viewport = new FitViewport(8, 5);
+        //viewport = new FitViewport(8, 5);
+        viewport = new FitViewport(worldWidth, worldHeight);
 
         viewport.update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), true);
 

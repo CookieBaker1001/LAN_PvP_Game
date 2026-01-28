@@ -2,6 +2,7 @@ package com.springer.knakobrak.screens;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -137,7 +138,10 @@ public class LobbyScreen implements Screen {
 
     private void handleMessage(String msg) {
         if (msg.startsWith("ASSIGNED_ID")) {
-            game.clientId = Integer.parseInt(msg.split(" ")[1]);
+            String[] data = msg.split(" ");
+            game.clientId = Integer.parseInt(data[1]);
+            game.playerColor = new Color(Float.parseFloat(data[2]), Float.parseFloat(data[3]), Float.parseFloat(data[4]), 1);
+            System.out.println("Assigned ID: " + game.clientId + " Color: " + game.playerColor);
         } else if (msg.startsWith("PLAYER_LIST")) {
             updatePlayerList(msg);
         } else if (msg.equals("GAME_START")) {

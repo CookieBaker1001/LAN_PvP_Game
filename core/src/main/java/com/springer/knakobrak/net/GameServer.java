@@ -1,5 +1,8 @@
 package com.springer.knakobrak.net;
 
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.math.MathUtils;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -122,8 +125,9 @@ public class GameServer implements Runnable {
                 host = this;
                 host.isHost = true;
             }
+            Color color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
             clients.put(id, this);
-            out.println("ASSIGNED_ID " + id);
+            out.println("ASSIGNED_ID " + id + " " + color.r + " " + color.g + " " + color.b);
             broadcastPlayerList();
         }
 
