@@ -32,6 +32,7 @@ public class LanPvpGame extends Game {
 
     @Override
     public void create() {
+        username = "UNNAMED-" + (int)(Math.random() * 100000);
         worldWidth = Gdx.graphics.getWidth();
         worldHeight = Gdx.graphics.getHeight();
         batch = new SpriteBatch();

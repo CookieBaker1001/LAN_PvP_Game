@@ -1,7 +1,10 @@
 package com.springer.knakobrak.net;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
+import com.springer.knakobrak.world.PlayerState;
+import com.springer.knakobrak.world.ProjectileState;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -9,6 +12,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class GameServer implements Runnable {
@@ -19,6 +23,9 @@ public class GameServer implements Runnable {
     private ClientHandler host;
     private static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(1);
+
+    private List<ProjectileState> projectiles = new ArrayList<>();
+    private int nextProjectileId = 1;
 
     private int port;
 
@@ -40,6 +47,7 @@ public class GameServer implements Runnable {
         try {
             //serverSocket = new ServerSocket(port);
             System.out.println("Game server started on port " + port);
+            new Thread(this::gameLoop).start();
             while (running) {
                 Socket socket = serverSocket.accept();
                 ClientHandler client = new ClientHandler(socket);
@@ -59,30 +67,6 @@ public class GameServer implements Runnable {
         }
     }
 
-    public void shutdown() {
-        running = false;
-        clients.values().forEach(ClientHandler::disconnect);
-        clients.clear();
-        host = null;
-        try {
-            serverSocket.close();
-        } catch (IOException ignored) {}
-    }
-
-    private void broadcast(String msg) {
-        clients.values().forEach(c -> c.out.println(msg));
-    }
-
-    private void broadcastPlayerList() {
-        StringBuilder sb = new StringBuilder("PLAYER_LIST ");
-        for (ClientHandler c : clients.values()) {
-            sb.append(c.id).append(":").append(c.name);
-            if (c.isHost) sb.append(" (HOST)");
-            sb.append("_");
-        }
-        broadcast(sb.toString());
-    }
-
     private class ClientHandler implements Runnable {
 
         private int id;
@@ -92,6 +76,7 @@ public class GameServer implements Runnable {
         private PrintWriter out;
         private boolean isHost;
 
+        private final Queue<String> messageQueue = new ConcurrentLinkedQueue<>();
         PlayerState playerState;
 
         ClientHandler(Socket socket) throws IOException {
@@ -104,12 +89,9 @@ public class GameServer implements Runnable {
         public void run() {
             try {
                 handshake();
-                while (serverState != ServerState.SHUTDOWN) {
-                    if (serverState == ServerState.LOBBY) {
-                        lobbyLoop();
-                    } else if (serverState == ServerState.GAME) {
-                        gameLoop();
-                    }
+                String line;
+                while ((line = in.readLine()) != null) {
+                    messageQueue.add(line); // thread-safe queue
                 }
             } catch (IOException ignored) {
             } finally {
@@ -131,50 +113,19 @@ public class GameServer implements Runnable {
             broadcastPlayerList();
         }
 
-        private void lobbyLoop() throws IOException {
-            String line;
-            while (serverState == ServerState.LOBBY && (line = in.readLine()) != null) {
-                if (line.equals("QUIT")) {
-                    break;
-                }
-                if (line.equals("START_GAME") && this == host) {
-                    serverState = ServerState.GAME;
-                    spawnPlayers();
-                    broadcastGameState();
-                    broadcast("GAME_START");
-                }
-            }
-        }
-
-        private void gameLoop() throws IOException {
-            String line;
-            while (serverState == ServerState.GAME && (line = in.readLine()) != null) {
-                if (line.equals("QUIT")) {
-                    return;
-                }
-                if (line.startsWith("MOVE")) {
-                    String[] parts = line.split(" ");
-                    float dx = Float.parseFloat(parts[1]);
-                    float dy = Float.parseFloat(parts[2]);
-                    float SPEED = Float.parseFloat(parts[3]);
-
-//                    Player p = players.get(this);
-//                    p.x += dx * SPEED;
-//                    p.y += dy * SPEED;
-                    playerState.x += dx * SPEED;
-                    playerState.y += dy * SPEED;
-                    broadcastGameState();
-                }
-            }
-        }
+//        private void broadcastPlayerFire(String angle) {
+//            String[] parts = angle.split(" ");
+//            broadcast("SHOOT " + id + " " + parts[1] + " " + parts[2]);
+//        }
 
         private void disconnect() {
             clients.remove(id);
-            broadcastPlayerList();
             if (this == host) {
                 broadcast("HOST_LEFT");
                 serverState = ServerState.SHUTDOWN;
-                shutdown();
+                    shutdown();
+            } else {
+                broadcastPlayerList();
             }
             try {
                 socket.close();
@@ -182,14 +133,114 @@ public class GameServer implements Runnable {
         }
     }
 
+    private void gameLoop() {
+        final long TICK_MS = 16; // ~60Hz
+        long last = System.nanoTime();
+        long now;
+        float delta;
+        while (serverState != ServerState.SHUTDOWN) {
+            now = System.nanoTime();
+            delta = (now - last) / 1_000_000_000f;
+            last = now;
+            if (serverState == ServerState.GAME) {
+                processGameInputs();
+                updateProjectiles(delta);
+                broadcastGameState();
+            } else if (serverState == ServerState.LOBBY) {
+                processMessagesInLobby();
+            }
+            try {
+                Thread.sleep(TICK_MS); // ~60 Hz
+            } catch (InterruptedException ignored) {}
+        }
+    }
+
+    private void processMessagesInLobby() {
+        for (ClientHandler c : clients.values()) {
+            String line;
+            while ((line = c.messageQueue.poll()) != null) {
+                if (line.equals("START_GAME") && c == host) {
+                    serverState = ServerState.GAME;
+                    spawnPlayers();
+                    broadcast("GAME_START");
+                    System.out.println("Game started by host.");
+                }
+            }
+        }
+    }
+
+    private void processGameInputs() {
+        for (ClientHandler c : clients.values()) {
+            String line;
+            while ((line = c.messageQueue.poll()) != null) {
+                if (line.startsWith("MOVE")) {
+                    String[] p = line.split(" ");
+                    float dx = Float.parseFloat(p[1]);
+                    float dy = Float.parseFloat(p[2]);
+                    float speed = Float.parseFloat(p[3]);
+                    c.playerState.x += dx * speed;
+                    c.playerState.y += dy * speed;
+                }
+                if (line.startsWith("SHOOT")) {
+                    String[] p = line.split(" ");
+                    float dx = Float.parseFloat(p[1]);
+                    float dy = Float.parseFloat(p[2]);
+                    ProjectileState proj = new ProjectileState();
+                    proj.id = nextProjectileId++;
+                    proj.ownerId = c.id;
+                    proj.x = c.playerState.x + dx * 20;
+                    proj.y = c.playerState.y + dy * 20;
+                    proj.vx = dx * 400;
+                    proj.vy = dy * 400;
+                    projectiles.add(proj);
+                }
+            }
+        }
+    }
+
+    private void updateProjectiles(float delta) {
+        Iterator<ProjectileState> it = projectiles.iterator();
+        while (it.hasNext()) {
+            ProjectileState p = it.next();
+            p.x += p.vx * delta;
+            p.y += p.vy * delta;
+            if (Math.abs(p.x) > 3000 || Math.abs(p.y) > 3000) {
+                it.remove();
+            }
+        }
+    }
+
+    private void broadcast(String msg) {
+        clients.values().forEach(c -> c.out.println(msg));
+    }
+
+    private void broadcastPlayerList() {
+        StringBuilder sb = new StringBuilder("PLAYER_LIST ");
+        for (ClientHandler c : clients.values()) {
+            sb.append(c.id).append(":").append(c.name);
+            if (c.isHost) sb.append(" (HOST)");
+            sb.append("_");
+        }
+        broadcast(sb.toString());
+    }
+
     private void broadcastGameState() {
-        StringBuilder sb = new StringBuilder("STATE");
+        StringBuilder sb = new StringBuilder("STATE P");
         for (ClientHandler c : clients.values()) {
             PlayerState s = c.playerState;
             sb.append(" ")
                 .append(s.id).append(":")
                 .append(s.x).append(":")
                 .append(s.y);
+        }
+        sb.append(" PR");
+        for (ProjectileState p : projectiles) {
+            sb.append(" ");
+            sb.append(p.ownerId).append(":")
+                .append(p.x).append(":")
+                .append(p.y).append(":")
+                .append(p.vx).append(":")
+                .append(p.vy);
         }
         broadcast(sb.toString());
     }
@@ -205,8 +256,13 @@ public class GameServer implements Runnable {
         }
     }
 
-    static class PlayerState {
-        int id;
-        float x, y;
+    public void shutdown() {
+        running = false;
+        clients.values().forEach(ClientHandler::disconnect);
+        clients.clear();
+        host = null;
+        try {
+            serverSocket.close();
+        } catch (IOException ignored) {}
     }
 }

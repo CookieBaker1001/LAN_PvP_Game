@@ -86,6 +86,7 @@ public class LobbyScreen implements Screen {
             playButton.addListener(new ChangeListener() {
                 @Override
                 public void changed(ChangeEvent event, Actor actor) {
+                    System.out.println("Host starting game...");
                     game.client.send("START_GAME");
                 }
             });
