@@ -6,5 +6,9 @@ public class PlayerState {
     public int id;
     public Color color = Color.WHITE;
     public float x, y;
-    public int hp = 3;
+
+    @Override
+    public String toString () {
+        return "PlayerState{id=" + id + ", color=" + color + ", x=" + x + ", y=" + y + "}";
+    }
 }

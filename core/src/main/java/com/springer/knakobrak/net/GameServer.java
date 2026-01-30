@@ -1,10 +1,12 @@
 package com.springer.knakobrak.net;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
-import com.springer.knakobrak.world.PlayerState;
+import com.badlogic.gdx.math.Vector2;
+import com.springer.knakobrak.world.PlayerStateDTO;
 import com.springer.knakobrak.world.ProjectileState;
+import com.springer.knakobrak.world.ServerPlayerState;
+import com.badlogic.gdx.physics.box2d.*;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -15,6 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.springer.knakobrak.util.Constants.*;
+
 public class GameServer implements Runnable {
 
     private ServerSocket serverSocket;
@@ -22,13 +26,16 @@ public class GameServer implements Runnable {
 
     private ClientHandler host;
     private static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
-    private static Map<Integer, PlayerState> playerStates = new ConcurrentHashMap<>();
+    private static Map<Integer, ServerPlayerState> players = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(1);
 
-    private List<ProjectileState> projectiles = new ArrayList<>();
+    //private List<ProjectileState> projectiles = new ArrayList<>();
+    private static Map<Integer, ProjectileState> projectiles = new ConcurrentHashMap<>();
     private int nextProjectileId = 1;
 
     private int port;
+
+    World world;
 
     public GameServer(int port) throws IOException {
         this.port = port;
@@ -42,6 +49,104 @@ public class GameServer implements Runnable {
     }
 
     volatile ServerState serverState = ServerState.LOBBY;
+
+    void initPhysics() {
+        world = new World(new Vector2(0, 0), true);
+        world.setContactListener(new ContactListener() {
+            @Override
+            public void beginContact(Contact contact) {
+                Object a = contact.getFixtureA().getUserData();
+                Object b = contact.getFixtureB().getUserData();
+
+                handleCollision(a, b);
+            }
+
+            public void endContact(Contact contact) {}
+            public void preSolve(Contact contact, Manifold oldManifold) {}
+            public void postSolve(Contact contact, ContactImpulse impulse) {}
+        });
+    }
+
+    void handleCollision(Object a, Object b) {
+        if (a instanceof Integer && b instanceof Integer) {
+            int idA = (int) a;
+            int idB = (int) b;
+
+            if (isProjectile(idA) && isPlayer(idB)) {
+                hitPlayer(idB, idA);
+            } else if (isProjectile(idB) && isPlayer(idA)) {
+                hitPlayer(idA, idB);
+            }
+        }
+    }
+
+    boolean isPlayer(int id) {
+        return players.containsKey(id);
+    }
+
+    boolean isProjectile(int id) {
+        return projectiles.containsKey(id);
+    }
+
+    void hitPlayer(int playerId, int projectileId) {
+        //removeProjectile(projectileId);
+        projectiles.get(projectileId).isDead = true;
+        //damagePlayer(playerId);
+        players.values().forEach(player -> {
+            if (player.id == playerId) {
+                player.hp--;
+                System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
+            }
+        });
+    }
+
+    Body createPlayerBody(float x, float y, int playerId) {
+        BodyDef bd = new BodyDef();
+        bd.type = BodyDef.BodyType.DynamicBody;
+        bd.position.set(x, y);
+
+        Body body = world.createBody(bd);
+
+        CircleShape shape = new CircleShape();
+        shape.setRadius(PLAYER_RADIUS_M); // meters
+
+        FixtureDef fd = new FixtureDef();
+        fd.shape = shape;
+        fd.density = 1f;
+        fd.friction = 0f;
+        fd.restitution = 0f;
+
+        Fixture f = body.createFixture(fd);
+        f.setUserData(playerId);
+
+        shape.dispose();
+
+        return body;
+    }
+
+    Body createProjectile(float x, float y, float vx, float vy, int projId) {
+        BodyDef bd = new BodyDef();
+        bd.type = BodyDef.BodyType.DynamicBody;
+        bd.bullet = true;
+        bd.position.set(x, y);
+
+        Body body = world.createBody(bd);
+
+        CircleShape shape = new CircleShape();
+        shape.setRadius(BULLET_RADIUS_M);
+
+        FixtureDef fd = new FixtureDef();
+        fd.shape = shape;
+        fd.isSensor = true; // IMPORTANT for bullets
+
+        Fixture f = body.createFixture(fd);
+        f.setUserData(projId);
+
+        body.setLinearVelocity(vx, vy);
+
+        shape.dispose();
+        return body;
+    }
 
     @Override
     public void run() {
@@ -78,13 +183,13 @@ public class GameServer implements Runnable {
         private boolean isHost;
 
         private final Queue<String> messageQueue = new ConcurrentLinkedQueue<>();
-        PlayerState playerState;
+        public ServerPlayerState serverPlayerState;
 
         ClientHandler(Socket socket) throws IOException {
             this.socket = socket;
             in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-            this.playerState = new PlayerState();
+            //this.serverPlayerState = new ServerPlayerState();
         }
 
         @Override
@@ -108,9 +213,15 @@ public class GameServer implements Runnable {
                 host = this;
                 host.isHost = true;
             }
-            this.playerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
+            ServerPlayerState p = new ServerPlayerState();
+            p.id = id;
+            p.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
+
+            this.serverPlayerState = p;
+
             clients.put(id, this);
-            playerStates.put(id, this.playerState);
+            players.put(id, p);
+            System.out.println("OI! " + clients.get(id).serverPlayerState + " , " + players.get(id));
             //out.println("ASSIGNED_ID " + id + " " + color.r + " " + color.g + " " + color.b);
             out.println("ASSIGNED_ID " + id);
             broadcastPlayerList();
@@ -123,7 +234,7 @@ public class GameServer implements Runnable {
 
         private void disconnect() {
             clients.remove(id);
-            playerStates.remove(id);
+            players.remove(id);
             if (this == host) {
                 broadcast("HOST_LEFT");
                 serverState = ServerState.SHUTDOWN;
@@ -142,14 +253,29 @@ public class GameServer implements Runnable {
         long last = System.nanoTime();
         long now;
         float delta;
+        float dt = 1f / 60f;
+
+        int counter = 0;
         while (serverState != ServerState.SHUTDOWN) {
             now = System.nanoTime();
             delta = (now - last) / 1_000_000_000f;
             last = now;
+
+//            world = new World(new Vector2(0, 0), true);
+//            final float TIME_STEP = 1f / 60f;
+//            float accumulator = 0f;
+
             if (serverState == ServerState.GAME) {
+                System.out.println("Tick (" + (counter++) + ")");
                 processGameInputs();
-                updateProjectiles(delta);
+                updateProjectiles();
+
+                world.step(dt, 6, 2);
+
+                syncBodiesToGameState();
                 broadcastGameState();
+
+
             } else if (serverState == ServerState.LOBBY) {
                 processMessagesInLobby();
             }
@@ -159,14 +285,62 @@ public class GameServer implements Runnable {
         }
     }
 
+    private void syncBodiesToGameState() {
+//        for (ServerPlayerState p : players.values()) {
+//            //System.out.println(p.toString());
+//            if (p.body == null) {
+//                System.out.println("Warning: Player body is null for player ID " + p.id);
+//                continue;
+//            }
+//            Vector2 pos = p.body.getPosition();
+//            p.x = pos.x;
+//            p.y = pos.y;
+//        }
+
+        for (ServerPlayerState p : players.values()) {
+            if (p.body == null) continue;
+
+            Vector2 pos = p.body.getPosition();
+            p.x = pos.x;
+            p.y = pos.y;
+        }
+
+        for (ProjectileState proj : projectiles.values()) {
+            if (proj.body == null) continue;
+
+            Vector2 pos = proj.body.getPosition();
+            proj.x = pos.x;
+            proj.y = pos.y;
+        }
+//        // Sync player bodies
+//        for (ClientHandler c : clients.values()) {
+//            Body body = c.playerState.body;
+//            if (body != null) {
+//                Vector2 pos = body.getPosition();
+//                c.playerState.x = pos.x;
+//                c.playerState.y = pos.y;
+//            }
+//        }
+//
+//        // Sync projectile bodies
+//        for (ProjectileState p : projectiles) {
+//            Body body = p.body;
+//            if (body != null) {
+//                Vector2 pos = body.getPosition();
+//                p.x = pos.x;
+//                p.y = pos.y;
+//            }
+//        }
+    }
+
     private void processMessagesInLobby() {
         for (ClientHandler c : clients.values()) {
             String line;
             while ((line = c.messageQueue.poll()) != null) {
                 if (line.equals("START_GAME") && c == host) {
                     serverState = ServerState.GAME;
+                    initPhysics();
                     spawnPlayers();
-                    //broadcastStartGame();
                     broadcast("GAME_START");
                     System.out.println("Game started by host.");
                 }
@@ -174,30 +348,30 @@ public class GameServer implements Runnable {
         }
     }
 
-    private void broadcastStartGame() {
-        StringBuilder sb = new StringBuilder("GAME_START");
-        for (PlayerState p : playerStates.values()) {
-            System.out.println("Player " + p.id + " has color: " + p.color);
-            sb.append(" ").append(p.id).append(":")
-                .append(p.color.r).append(":")
-                .append(p.color.g).append(":")
-                .append(p.color.b);
-        }
-        System.out.println(sb);
-        broadcast(sb.toString());
-    }
-
     private void processGameInputs() {
         for (ClientHandler c : clients.values()) {
             String line;
             while ((line = c.messageQueue.poll()) != null) {
+                System.out.println("Processing input from player " + c.id + ": " + line);
                 if (line.startsWith("MOVE")) {
                     String[] p = line.split(" ");
                     float dx = Float.parseFloat(p[1]);
                     float dy = Float.parseFloat(p[2]);
-                    float speed = Float.parseFloat(p[3]);
-                    c.playerState.x += dx * speed;
-                    c.playerState.y += dy * speed;
+
+                    Body body = c.serverPlayerState.body;
+                    if (body == null) continue;
+
+                    Vector2 desiredVelocity = new Vector2(dx, dy).scl(PLAYER_SPEED_MPS);
+                    body.setLinearVelocity(desiredVelocity);
+
+//                    c.serverPlayerState.x += dx * speed;
+//                    c.serverPlayerState.y += dy * speed;
+                }
+                if (line.equals("STOP")) {
+                    Body body = c.serverPlayerState.body;
+                    if (body != null) {
+                        body.setLinearVelocity(0, 0);
+                    }
                 }
                 if (line.startsWith("SHOOT")) {
                     String[] p = line.split(" ");
@@ -206,23 +380,47 @@ public class GameServer implements Runnable {
                     ProjectileState proj = new ProjectileState();
                     proj.id = nextProjectileId++;
                     //proj.ownerId = c.id;
-                    proj.x = c.playerState.x + dx * 20;
-                    proj.y = c.playerState.y + dy * 20;
-                    proj.vx = dx * 400;
-                    proj.vy = dy * 400;
-                    projectiles.add(proj);
+
+                    Vector2 spawnPos = c.serverPlayerState.body.getPosition()
+                        .cpy()
+                        .add(dx * (COLLISION_DISTANCE_M + 1.3f), dy * (COLLISION_DISTANCE_M + 1.3f));
+
+                    proj.body = createProjectile(
+                        spawnPos.x,
+                        spawnPos.y,
+                        dx * BULLET_SPEED_MPS,
+                        dy * BULLET_SPEED_MPS,
+                        proj.id
+                    );
+
+//                    proj.x = c.serverPlayerState.x + dx * 20;
+//                    proj.y = c.serverPlayerState.y + dy * 20;
+//                    proj.vx = dx * 400;
+//                    proj.vy = dy * 400;
+//                    proj.body = createProjectile(proj.x, proj.y, proj.vx, proj.vy, proj.id);
+                    projectiles.put(proj.id, proj);
+                    //projectiles.add(proj);
                 }
             }
         }
     }
 
-    private void updateProjectiles(float delta) {
-        Iterator<ProjectileState> it = projectiles.iterator();
+    private void updateProjectiles() {
+        Iterator<ProjectileState> it = projectiles.values().iterator();
         while (it.hasNext()) {
-            ProjectileState p = it.next();
-            p.x += p.vx * delta;
-            p.y += p.vy * delta;
-            if (Math.abs(p.x) > 3000 || Math.abs(p.y) > 3000) {
+            ProjectileState ps = it.next();
+            Body body = ps.body;
+            if (body == null) continue;
+
+//            Vector2 pos = body.getPosition();
+//            ps.x = pos.x;
+//            ps.y = pos.y;
+
+//            Vector2 desiredVelocity = new Vector2(ps.vx, ps.vy).scl(BULLET_SPEED);
+//            body.setLinearVelocity(desiredVelocity);
+
+            if (ps.isDead || Math.abs(ps.x) > 3000 || Math.abs(ps.y) > 3000) {
+                world.destroyBody(body);
                 it.remove();
             }
         }
@@ -245,7 +443,7 @@ public class GameServer implements Runnable {
     private void broadcastGameState() {
         StringBuilder sb = new StringBuilder("STATE P");
         for (ClientHandler c : clients.values()) {
-            PlayerState s = c.playerState;
+            PlayerStateDTO s = PlayerStateDTO.FromServerToDTO(c.serverPlayerState);
             sb.append(" ")
                 .append(s.id).append(":")
                 .append(s.x).append(":")
@@ -255,7 +453,7 @@ public class GameServer implements Runnable {
                 .append(s.color.b);
         }
         sb.append(" PR");
-        for (ProjectileState p : projectiles) {
+        for (ProjectileState p : projectiles.values()) {
             sb.append(" ");
             sb.append(p.id).append(":")
                 .append(p.x).append(":")
@@ -269,11 +467,13 @@ public class GameServer implements Runnable {
     private void spawnPlayers() {
         int i = 0;
         for (ClientHandler c : clients.values()) {
-            c.playerState = new PlayerState();
-            c.playerState.id = c.id;
-            c.playerState.x = 100 + i * 80;
-            c.playerState.y = 200;
-            c.playerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
+            //c.serverPlayerState = new ServerPlayerState();
+            c.serverPlayerState.id = c.id;
+            c.serverPlayerState.x = 100 + i * 80;
+            c.serverPlayerState.y = 200;
+            c.serverPlayerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
+            c.serverPlayerState.body = createPlayerBody(c.serverPlayerState.x, c.serverPlayerState.y, c.id);
+            System.out.println(c.serverPlayerState.body);
             i++;
         }
     }
@@ -282,7 +482,7 @@ public class GameServer implements Runnable {
         running = false;
         clients.values().forEach(ClientHandler::disconnect);
         clients.clear();
-        playerStates.clear();
+        players.clear();
         host = null;
         try {
             serverSocket.close();

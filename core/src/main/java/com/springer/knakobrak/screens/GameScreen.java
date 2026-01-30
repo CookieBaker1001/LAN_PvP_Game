@@ -20,6 +20,7 @@ import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.world.PlayerState;
 import com.springer.knakobrak.world.ProjectileState;
+import static com.springer.knakobrak.util.Constants.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,13 +38,6 @@ public class GameScreen implements Screen {
     ShapeRenderer shapeRenderer = new ShapeRenderer();
 
     Map<Integer, ProjectileState> projectiles = new HashMap<>();
-
-    int playerSize = 20;
-    int projectileSize = 10;
-
-    int movementSpeed = 200;
-    float positionX = 100;
-    float positionY = 100;
 
     public GameScreen(LanPvpGame game) {
         this.game = game;
@@ -126,7 +120,9 @@ public class GameScreen implements Screen {
         }
 
         if (dx != 0 || dy != 0) {
-            game.client.send("MOVE " + dx + " " + dy + " " + (movementSpeed * delta));
+            game.client.send("MOVE " + dx + " " + dy);
+        } else {
+            game.client.send("STOP");
         }
     }
 
@@ -163,12 +159,12 @@ public class GameScreen implements Screen {
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         for (PlayerState p : players.values()) {
             shapeRenderer.setColor(p.color);
-            shapeRenderer.circle(p.x, p.y, playerSize);
+            shapeRenderer.circle(p.x, p.y, PLAYER_RADIUS_PX);
         }
 
         shapeRenderer.setColor(Color.YELLOW);
         for (ProjectileState p : projectiles.values()) {
-            shapeRenderer.circle(p.x, p.y, projectileSize);
+            shapeRenderer.circle(p.x, p.y, BULLET_RADIUS_PX);
         }
         shapeRenderer.end();
     }
