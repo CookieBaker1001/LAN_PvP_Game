@@ -66,11 +66,6 @@ public class GameScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        // 1. Poll input (WASD + mouse)
-        // 2. Send InputMessage to server
-        // 3. Receive WorldStateMessage
-        // 4. Draw circles
-
         input(delta);
         game.client.poll(this::handleMessage);
         logic(delta);
@@ -87,13 +82,6 @@ public class GameScreen implements Screen {
         if (Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1;
         if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
         if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
-
-//        if (Gdx.input.isTouched()) {
-//            touchPos.set(Gdx.input.getX(), Gdx.input.getY());
-//            game.viewport.unproject(touchPos);
-//            String angle = touchPos.y + " " + touchPos.x;
-//            game.client.send("SHOOT " + angle);
-//        }
 
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             Vector3 mouse = new Vector3(
@@ -121,6 +109,8 @@ public class GameScreen implements Screen {
 
         if (dx != 0 || dy != 0) {
             game.client.send("MOVE " + dx + " " + dy);
+            PlayerState me = players.get(game.clientId);
+            System.out.println(me.x + " " + me.y);
         } else {
             game.client.send("STOP");
         }
@@ -202,6 +192,10 @@ public class GameScreen implements Screen {
         else if (msg.startsWith("SHOOT")) {
             String[] parts = msg.split(" ");
             System.out.println("Player " + parts[1] + " fired a shot at angle " + parts[2] + "!");
+        }
+        else if (msg.startsWith("DAMAGE")) {
+            String[] parts = msg.split(" ");
+            System.out.println("Player " + parts[1] + " took damage! HP left: " + parts[3]);
         }
     }
 

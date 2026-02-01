@@ -3,6 +3,7 @@ package com.springer.knakobrak.net;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
+import com.springer.knakobrak.util.Constants;
 import com.springer.knakobrak.world.PlayerStateDTO;
 import com.springer.knakobrak.world.ProjectileState;
 import com.springer.knakobrak.world.ServerPlayerState;
@@ -55,6 +56,7 @@ public class GameServer implements Runnable {
         world.setContactListener(new ContactListener() {
             @Override
             public void beginContact(Contact contact) {
+                System.out.println("Collision detected");
                 Object a = contact.getFixtureA().getUserData();
                 Object b = contact.getFixtureB().getUserData();
 
@@ -90,12 +92,13 @@ public class GameServer implements Runnable {
 
     void hitPlayer(int playerId, int projectileId) {
         //removeProjectile(projectileId);
-        projectiles.get(projectileId).isDead = true;
+        //projectiles.get(projectileId).isDead = true;
         //damagePlayer(playerId);
         players.values().forEach(player -> {
             if (player.id == playerId) {
                 player.hp--;
-                System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
+                broadcast("DAMAGE " + playerId + " _now_has " + player.hp + " HP.");
+                //System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
             }
         });
     }
@@ -108,13 +111,13 @@ public class GameServer implements Runnable {
         Body body = world.createBody(bd);
 
         CircleShape shape = new CircleShape();
-        shape.setRadius(PLAYER_RADIUS_M); // meters
+        shape.setRadius(PLAYER_RADIUS_M * PIXELS_PER_METER); // meters
 
         FixtureDef fd = new FixtureDef();
         fd.shape = shape;
         fd.density = 1f;
         fd.friction = 0f;
-        fd.restitution = 0f;
+        fd.restitution = 0.4f;
 
         Fixture f = body.createFixture(fd);
         f.setUserData(playerId);
@@ -124,7 +127,7 @@ public class GameServer implements Runnable {
         return body;
     }
 
-    Body createProjectile(float x, float y, float vx, float vy, int projId) {
+    Body createProjectile(float x, float y/*, float vx, float vy*/, int projId) {
         BodyDef bd = new BodyDef();
         bd.type = BodyDef.BodyType.DynamicBody;
         bd.bullet = true;
@@ -133,17 +136,43 @@ public class GameServer implements Runnable {
         Body body = world.createBody(bd);
 
         CircleShape shape = new CircleShape();
-        shape.setRadius(BULLET_RADIUS_M);
+        shape.setRadius(BULLET_RADIUS_M * PIXELS_PER_METER);
 
         FixtureDef fd = new FixtureDef();
         fd.shape = shape;
-        fd.isSensor = true; // IMPORTANT for bullets
+        fd.density = 1f;
+        fd.friction = 0f;
+        fd.restitution = 1f;
+
+        //fd.isSensor = true; // IMPORTANT for bullets
 
         Fixture f = body.createFixture(fd);
         f.setUserData(projId);
 
-        body.setLinearVelocity(vx, vy);
+        //body.setLinearVelocity(vx, vy);
 
+        shape.dispose();
+        return body;
+    }
+
+    Body createWall(int x, int y, int height, int width) {
+        BodyDef bd = new BodyDef();
+        bd.type = BodyDef.BodyType.DynamicBody;
+        bd.bullet = true;
+        bd.position.set(x - width/2f, y - height/2f);
+
+        Body body = world.createBody(bd);
+
+        PolygonShape shape = new PolygonShape();
+        shape.setAsBox(width / 2f, height / 2f);
+
+        FixtureDef fd = new FixtureDef();
+        fd.shape = shape;
+        fd.density = 1f;
+        fd.friction = 0f;
+        fd.restitution = 1f;
+
+        body.createFixture(fd);
         shape.dispose();
         return body;
     }
@@ -151,7 +180,6 @@ public class GameServer implements Runnable {
     @Override
     public void run() {
         try {
-            //serverSocket = new ServerSocket(port);
             System.out.println("Game server started on port " + port);
             new Thread(this::gameLoop).start();
             while (running) {
@@ -189,7 +217,6 @@ public class GameServer implements Runnable {
             this.socket = socket;
             in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-            //this.serverPlayerState = new ServerPlayerState();
         }
 
         @Override
@@ -221,16 +248,9 @@ public class GameServer implements Runnable {
 
             clients.put(id, this);
             players.put(id, p);
-            System.out.println("OI! " + clients.get(id).serverPlayerState + " , " + players.get(id));
-            //out.println("ASSIGNED_ID " + id + " " + color.r + " " + color.g + " " + color.b);
             out.println("ASSIGNED_ID " + id);
             broadcastPlayerList();
         }
-
-//        private void broadcastPlayerFire(String angle) {
-//            String[] parts = angle.split(" ");
-//            broadcast("SHOOT " + id + " " + parts[1] + " " + parts[2]);
-//        }
 
         private void disconnect() {
             clients.remove(id);
@@ -261,14 +281,10 @@ public class GameServer implements Runnable {
             delta = (now - last) / 1_000_000_000f;
             last = now;
 
-//            world = new World(new Vector2(0, 0), true);
-//            final float TIME_STEP = 1f / 60f;
-//            float accumulator = 0f;
-
             if (serverState == ServerState.GAME) {
-                System.out.println("Tick (" + (counter++) + ")");
+                //System.out.println("Tick (" + (counter++) + ")");
                 processGameInputs();
-                updateProjectiles();
+                updateProjectiles(delta);
 
                 world.step(dt, 6, 2);
 
@@ -286,17 +302,6 @@ public class GameServer implements Runnable {
     }
 
     private void syncBodiesToGameState() {
-//        for (ServerPlayerState p : players.values()) {
-//            //System.out.println(p.toString());
-//            if (p.body == null) {
-//                System.out.println("Warning: Player body is null for player ID " + p.id);
-//                continue;
-//            }
-//            Vector2 pos = p.body.getPosition();
-//            p.x = pos.x;
-//            p.y = pos.y;
-//        }
-
         for (ServerPlayerState p : players.values()) {
             if (p.body == null) continue;
 
@@ -312,25 +317,6 @@ public class GameServer implements Runnable {
             proj.x = pos.x;
             proj.y = pos.y;
         }
-//        // Sync player bodies
-//        for (ClientHandler c : clients.values()) {
-//            Body body = c.playerState.body;
-//            if (body != null) {
-//                Vector2 pos = body.getPosition();
-//                c.playerState.x = pos.x;
-//                c.playerState.y = pos.y;
-//            }
-//        }
-//
-//        // Sync projectile bodies
-//        for (ProjectileState p : projectiles) {
-//            Body body = p.body;
-//            if (body != null) {
-//                Vector2 pos = body.getPosition();
-//                p.x = pos.x;
-//                p.y = pos.y;
-//            }
-//        }
     }
 
     private void processMessagesInLobby() {
@@ -340,6 +326,7 @@ public class GameServer implements Runnable {
                 if (line.equals("START_GAME") && c == host) {
                     serverState = ServerState.GAME;
                     initPhysics();
+                    generateWorldWalls(world);
                     spawnPlayers();
                     broadcast("GAME_START");
                     System.out.println("Game started by host.");
@@ -348,11 +335,23 @@ public class GameServer implements Runnable {
         }
     }
 
+    private void generateWorldWalls(World world) {
+        // Create walls around the play area
+//        createWall(0, -(WORLD_HEIGHT * PIXELS_PER_METER) / 2, WORLD_HEIGHT * PIXELS_PER_METER, 10); // Bottom
+//        createWall(0, (WORLD_HEIGHT * PIXELS_PER_METER) / 2, WORLD_HEIGHT * PIXELS_PER_METER, 10);  // Top
+//        createWall(-(WORLD_WIDTH * PIXELS_PER_METER) / 2, 0, 10, WORLD_WIDTH * PIXELS_PER_METER);   // Left
+//        createWall(WORLD_WIDTH * PIXELS_PER_METER / 2, 0, 10, WORLD_WIDTH * PIXELS_PER_METER);    // Right
+
+        //createWall((int)WORLD_HEIGHT, 0, 20, 10); // Left
+
+        // Additional internal walls can be created here if desired
+    }
+
     private void processGameInputs() {
         for (ClientHandler c : clients.values()) {
             String line;
             while ((line = c.messageQueue.poll()) != null) {
-                System.out.println("Processing input from player " + c.id + ": " + line);
+                //System.out.println("Processing input from player " + c.id + ": " + line);
                 if (line.startsWith("MOVE")) {
                     String[] p = line.split(" ");
                     float dx = Float.parseFloat(p[1]);
@@ -361,11 +360,8 @@ public class GameServer implements Runnable {
                     Body body = c.serverPlayerState.body;
                     if (body == null) continue;
 
-                    Vector2 desiredVelocity = new Vector2(dx, dy).scl(PLAYER_SPEED_MPS);
+                    Vector2 desiredVelocity = new Vector2(dx, dy).scl(Constants.metersToPx(PLAYER_SPEED_MPS));
                     body.setLinearVelocity(desiredVelocity);
-
-//                    c.serverPlayerState.x += dx * speed;
-//                    c.serverPlayerState.y += dy * speed;
                 }
                 if (line.equals("STOP")) {
                     Body body = c.serverPlayerState.body;
@@ -383,15 +379,21 @@ public class GameServer implements Runnable {
 
                     Vector2 spawnPos = c.serverPlayerState.body.getPosition()
                         .cpy()
-                        .add(dx * (COLLISION_DISTANCE_M + 1.3f), dy * (COLLISION_DISTANCE_M + 1.3f));
+                        .add(dx * (Constants.metersToPx(COLLISION_DISTANCE_M) + 1.3f), dy * (Constants.metersToPx(COLLISION_DISTANCE_M) + 1.3f));
 
                     proj.body = createProjectile(
                         spawnPos.x,
                         spawnPos.y,
-                        dx * BULLET_SPEED_MPS,
-                        dy * BULLET_SPEED_MPS,
+                        //dx * BULLET_SPEED_MPS,
+                        //dy * BULLET_SPEED_MPS,
                         proj.id
                     );
+
+                    Vector2 desiredVelocity = new Vector2(dx, dy).scl(Constants.metersToPx(BULLET_SPEED_MPS));
+                    proj.body.setLinearVelocity(desiredVelocity);
+
+//                    Vector2 v = proj.body.getLinearVelocity();
+//                    System.out.println("Projectile: " + v.x + ", " + v.y);
 
 //                    proj.x = c.serverPlayerState.x + dx * 20;
 //                    proj.y = c.serverPlayerState.y + dy * 20;
@@ -405,12 +407,14 @@ public class GameServer implements Runnable {
         }
     }
 
-    private void updateProjectiles() {
+    private void updateProjectiles(float delta) {
         Iterator<ProjectileState> it = projectiles.values().iterator();
         while (it.hasNext()) {
             ProjectileState ps = it.next();
             Body body = ps.body;
             if (body == null) continue;
+
+            ps.lifeTime += delta;
 
 //            Vector2 pos = body.getPosition();
 //            ps.x = pos.x;
@@ -419,7 +423,7 @@ public class GameServer implements Runnable {
 //            Vector2 desiredVelocity = new Vector2(ps.vx, ps.vy).scl(BULLET_SPEED);
 //            body.setLinearVelocity(desiredVelocity);
 
-            if (ps.isDead || Math.abs(ps.x) > 3000 || Math.abs(ps.y) > 3000) {
+            if (ps.lifeTime >= ps.lifeTimeLimit || Math.abs(ps.x) > 3000 || Math.abs(ps.y) > 3000) {
                 world.destroyBody(body);
                 it.remove();
             }
@@ -473,7 +477,6 @@ public class GameServer implements Runnable {
             c.serverPlayerState.y = 200;
             c.serverPlayerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
             c.serverPlayerState.body = createPlayerBody(c.serverPlayerState.x, c.serverPlayerState.y, c.id);
-            System.out.println(c.serverPlayerState.body);
             i++;
         }
     }
