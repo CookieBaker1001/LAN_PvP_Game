@@ -2,7 +2,6 @@ package com.springer.knakobrak.screens;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -12,12 +11,9 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
-import com.springer.knakobrak.world.PlayerState;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import com.springer.knakobrak.util.Constants;
+import com.springer.knakobrak.world.client.Wall;
+import com.springer.knakobrak.world.server.ServerWall;
 
 public class LobbyScreen implements Screen {
 
@@ -71,9 +67,7 @@ public class LobbyScreen implements Screen {
         leaveButton.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
-                // Disconnect client
                 game.client.disconnect();
-                // If host, stop server
                 if (isHost) {
                     game.hostedServer.shutdown();
                     try {
@@ -152,24 +146,37 @@ public class LobbyScreen implements Screen {
             System.out.println("Assigned ID: " + game.clientId);
         } else if (msg.startsWith("PLAYER_LIST")) {
             updatePlayerList(msg);
-        } else if (msg.equals("GAME_START")) {
-            // Assigns color to players
-//            String[] parts = msg.split(" ");
-//            for (int i = 1; i < parts.length; i++) {
-//                String[] data = parts[i].split(":");
-//                int id = Integer.parseInt(data[0]);
-//                float r = Float.parseFloat(data[1]);
-//                float g = Float.parseFloat(data[2]);
-//                float b = Float.parseFloat(data[3]);
-//                PlayerState p = game.players.get(id);
-//                if (p != null) {
-//                    p.color = new Color(r, g, b, 1);
-//                }
-//            }
+        }
+//        else if (msg.startsWith("WALLS")) {
+//            receiveWalls(msg);
+//        }
+//        else if (msg.equals("GAME_START")) {
+//            game.setScreen(new GameScreen(game));
+//        }
+        else if (msg.startsWith("GAME_START")) {
+            receiveWalls(msg);
             game.setScreen(new GameScreen(game));
         } else if (msg.equals("HOST_LEFT")) {
             game.cleanupNetworking();
             game.setScreen(new MainMenuScreen(game));
+        }
+    }
+
+    private void receiveWalls(String msg) {
+        String[] parts = msg.split(" ");
+        System.out.println("Received walls: " + msg);
+        game.walls.clear();
+        for (int i = 1; i < parts.length; i += 4) {
+            float x = Constants.metersToPx(Float.parseFloat(parts[i]));
+            float y = Constants.metersToPx(Float.parseFloat(parts[i + 1]));
+            float width = Constants.metersToPx(Float.parseFloat(parts[i + 2]));
+            float height = Constants.metersToPx(Float.parseFloat(parts[i + 3]));
+            Wall wall = new Wall();
+            wall.x = x;
+            wall.y = y;
+            wall.width = width;
+            wall.height = height;
+            game.walls.add(wall);
         }
     }
 

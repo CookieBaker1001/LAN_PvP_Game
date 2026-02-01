@@ -1,4 +1,4 @@
-package com.springer.knakobrak.world;
+package com.springer.knakobrak.world.client;
 
 import com.badlogic.gdx.graphics.Color;
 

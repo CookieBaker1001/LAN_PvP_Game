@@ -2,18 +2,15 @@ package com.springer.knakobrak;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
-import com.springer.knakobrak.screens.LobbyScreen;
 import com.springer.knakobrak.screens.MainMenuScreen;
-import com.springer.knakobrak.world.PlayerState;
-
-import java.util.HashMap;
-import java.util.Map;
+import com.springer.knakobrak.world.client.Wall;
+import com.springer.knakobrak.world.server.ServerWall;
 
 
 public class LanPvpGame extends Game {
@@ -33,6 +30,8 @@ public class LanPvpGame extends Game {
 
     public float worldWidth;
     public float worldHeight;
+
+    public Array<Wall> walls = new Array<>();
 
     @Override
     public void create() {

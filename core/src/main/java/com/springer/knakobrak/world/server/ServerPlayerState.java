@@ -1,4 +1,4 @@
-package com.springer.knakobrak.world;
+package com.springer.knakobrak.world.server;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.physics.box2d.*;

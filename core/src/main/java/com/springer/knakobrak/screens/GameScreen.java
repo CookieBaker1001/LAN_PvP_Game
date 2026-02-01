@@ -7,7 +7,6 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector2;
@@ -15,11 +14,16 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
-import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
-import com.springer.knakobrak.world.PlayerState;
-import com.springer.knakobrak.world.ProjectileState;
+import com.springer.knakobrak.util.Constants;
+import com.springer.knakobrak.world.client.PlayerState;
+import com.springer.knakobrak.world.client.ProjectileState;
+import com.springer.knakobrak.world.client.Wall;
+import com.springer.knakobrak.world.server.ServerProjectileState;
+import com.sun.org.apache.bcel.internal.Const;
+import jdk.javadoc.internal.doclets.toolkit.builders.ConstantsSummaryBuilder;
+
 import static com.springer.knakobrak.util.Constants.*;
 
 import java.util.HashMap;
@@ -38,6 +42,7 @@ public class GameScreen implements Screen {
     ShapeRenderer shapeRenderer = new ShapeRenderer();
 
     Map<Integer, ProjectileState> projectiles = new HashMap<>();
+    Label coordinatesLabel;
 
     public GameScreen(LanPvpGame game) {
         this.game = game;
@@ -59,9 +64,11 @@ public class GameScreen implements Screen {
         table.setFillParent(true);
         stage.addActor(table);
 
-        Label label = new Label("GAME STARTED!", game.uiSkin);
-        label.setFontScale(2f);
-        table.add(label);
+        table.top().left().pad(10);
+
+        coordinatesLabel = new Label("x: 0.0, y: 0.0", game.uiSkin);
+        coordinatesLabel.setFontScale(1.5f);
+        table.add(coordinatesLabel);
     }
 
     @Override
@@ -109,8 +116,8 @@ public class GameScreen implements Screen {
 
         if (dx != 0 || dy != 0) {
             game.client.send("MOVE " + dx + " " + dy);
-            PlayerState me = players.get(game.clientId);
-            System.out.println(me.x + " " + me.y);
+//            PlayerState me = players.get(game.clientId);
+//            System.out.println(me.x + " " + me.y);
         } else {
             game.client.send("STOP");
         }
@@ -126,9 +133,9 @@ public class GameScreen implements Screen {
 
     private void logic(float delta) {
         moveCameraToPlayer();
-
     }
 
+    float xPx, yPx, sizePx, half;
     private void draw() {
         //ScreenUtils.clear(Color.BLACK);
 
@@ -147,14 +154,49 @@ public class GameScreen implements Screen {
 
         shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(Color.BROWN);
+        for (Wall w : game.walls) {
+
+//            xPx = Constants.metersToPx(w.x);
+//            yPx = Constants.metersToPx(w.y);
+//
+//            sizePx = Constants.metersToPx(1f); // 1 meter → pixels
+//            half = sizePx / 2f;
+//
+//            shapeRenderer.rect(
+//                xPx - half,   // bottom-left X
+//                yPx - half,   // bottom-left Y
+//                sizePx,       // width
+//                sizePx        // height
+//            );
+
+            //System.out.println("Drawing wall at " + w.x + " " + w.y + " size " + w.width + " " + w.height);
+            shapeRenderer.setColor(Color.BROWN);
+            //shapeRenderer.rect(w.x, w.y, w.width, w.height);
+
+            shapeRenderer.rect(
+                w.x - w.width / 2f,
+                w.y - w.height / 2f,
+                w.width,
+                w.height
+            );
+        }
         for (PlayerState p : players.values()) {
             shapeRenderer.setColor(p.color);
             shapeRenderer.circle(p.x, p.y, PLAYER_RADIUS_PX);
         }
-
         shapeRenderer.setColor(Color.YELLOW);
         for (ProjectileState p : projectiles.values()) {
             shapeRenderer.circle(p.x, p.y, BULLET_RADIUS_PX);
+        }
+        shapeRenderer.end();
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.setColor(Color.BLUE);
+        for (int i = -20; i <= 20; i++) {
+            float p = Constants.metersToPx(i);
+            shapeRenderer.line(p, -1000, p, 1000); // vertical
+            shapeRenderer.line(-1000, p, 1000, p); // horizontal
         }
         shapeRenderer.end();
     }
@@ -212,8 +254,8 @@ public class GameScreen implements Screen {
         while (i < tokens.length && !tokens[i].equals("PR")) {
             String[] data = tokens[i].split(":");
             int id = Integer.parseInt(data[0]);
-            float x = Float.parseFloat(data[1]);
-            float y = Float.parseFloat(data[2]);
+            float x = Constants.metersToPx(Float.parseFloat(data[1]));
+            float y = Constants.metersToPx(Float.parseFloat(data[2]));
             float r = Float.parseFloat(data[3]);
             float g = Float.parseFloat(data[4]);
             float b = Float.parseFloat(data[5]);
@@ -229,6 +271,12 @@ public class GameScreen implements Screen {
             p.color.g = g;
             p.color.b = b;
             i++;
+
+            //System.out.println("game.clientId: " + game.clientId + ", received player id: " + id);
+            if (id == game.clientId) {
+                //System.out.println("My position: " + x + " " + y);
+                coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", Constants.pxToMeters(x), Constants.pxToMeters(y)));
+            }
         }
 
         projectiles.clear();
@@ -238,8 +286,8 @@ public class GameScreen implements Screen {
             while (i < tokens.length) {
                 String[] data = tokens[i].split(":");
                 int id = Integer.parseInt(data[0]);
-                float x = Float.parseFloat(data[1]);
-                float y = Float.parseFloat(data[2]);
+                float x = Constants.metersToPx(Float.parseFloat(data[1]));
+                float y = Constants.metersToPx(Float.parseFloat(data[2]));
 
                 ProjectileState p = new ProjectileState();
                 p.id = id;

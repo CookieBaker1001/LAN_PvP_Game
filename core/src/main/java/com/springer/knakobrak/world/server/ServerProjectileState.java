@@ -1,8 +1,8 @@
-package com.springer.knakobrak.world;
+package com.springer.knakobrak.world.server;
 
 import com.badlogic.gdx.physics.box2d.Body;
 
-public class ProjectileState {
+public class ServerProjectileState {
     public int id;
     //public int ownerId;
     public float x, y;

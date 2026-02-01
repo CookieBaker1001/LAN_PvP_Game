@@ -3,11 +3,13 @@ package com.springer.knakobrak.net;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.utils.Array;
 import com.springer.knakobrak.util.Constants;
 import com.springer.knakobrak.world.PlayerStateDTO;
-import com.springer.knakobrak.world.ProjectileState;
-import com.springer.knakobrak.world.ServerPlayerState;
+import com.springer.knakobrak.world.server.ServerProjectileState;
+import com.springer.knakobrak.world.server.ServerPlayerState;
 import com.badlogic.gdx.physics.box2d.*;
+import com.springer.knakobrak.world.server.ServerWall;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -23,6 +25,7 @@ import static com.springer.knakobrak.util.Constants.*;
 public class GameServer implements Runnable {
 
     private ServerSocket serverSocket;
+    private int port;
     private volatile boolean running = true;
 
     private ClientHandler host;
@@ -30,13 +33,11 @@ public class GameServer implements Runnable {
     private static Map<Integer, ServerPlayerState> players = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(1);
 
-    //private List<ProjectileState> projectiles = new ArrayList<>();
-    private static Map<Integer, ProjectileState> projectiles = new ConcurrentHashMap<>();
+    private static Map<Integer, ServerProjectileState> projectiles = new ConcurrentHashMap<>();
     private int nextProjectileId = 1;
 
-    private int port;
-
     World world;
+    private static Array<ServerWall> walls = new Array<>();
 
     public GameServer(int port) throws IOException {
         this.port = port;
@@ -111,7 +112,7 @@ public class GameServer implements Runnable {
         Body body = world.createBody(bd);
 
         CircleShape shape = new CircleShape();
-        shape.setRadius(PLAYER_RADIUS_M * PIXELS_PER_METER); // meters
+        shape.setRadius(PLAYER_RADIUS_M);
 
         FixtureDef fd = new FixtureDef();
         fd.shape = shape;
@@ -136,7 +137,7 @@ public class GameServer implements Runnable {
         Body body = world.createBody(bd);
 
         CircleShape shape = new CircleShape();
-        shape.setRadius(BULLET_RADIUS_M * PIXELS_PER_METER);
+        shape.setRadius(BULLET_RADIUS_M);
 
         FixtureDef fd = new FixtureDef();
         fd.shape = shape;
@@ -157,23 +158,51 @@ public class GameServer implements Runnable {
 
     Body createWall(int x, int y, int height, int width) {
         BodyDef bd = new BodyDef();
-        bd.type = BodyDef.BodyType.DynamicBody;
-        bd.bullet = true;
-        bd.position.set(x - width/2f, y - height/2f);
+        bd.type = BodyDef.BodyType.StaticBody;
+        //bd.position.set(x - width/2f, y - height/2f);
+        bd.position.set(x, y);
 
         Body body = world.createBody(bd);
 
         PolygonShape shape = new PolygonShape();
         shape.setAsBox(width / 2f, height / 2f);
+        //shape.setAsBox(width, height);
 
         FixtureDef fd = new FixtureDef();
         fd.shape = shape;
-        fd.density = 1f;
+        fd.density = 0f;
         fd.friction = 0f;
         fd.restitution = 1f;
 
         body.createFixture(fd);
+        body.setFixedRotation(true);
         shape.dispose();
+        return body;
+    }
+
+    Body createTestBox() {
+        BodyDef bd = new BodyDef();
+        bd.type = BodyDef.BodyType.StaticBody;
+
+        // position is CENTER of the box, in meters
+        bd.position.set(2f, 2f);
+
+        Body body = world.createBody(bd);
+
+        PolygonShape shape = new PolygonShape();
+
+        // setAsBox takes HALF-width and HALF-height (meters)
+        shape.setAsBox(0.5f, 0.5f); // 1m × 1m total
+
+        FixtureDef fd = new FixtureDef();
+        fd.shape = shape;
+        fd.density = 0f;
+        fd.friction = 0f;
+        fd.restitution = 0f;
+
+        body.createFixture(fd);
+        shape.dispose();
+
         return body;
     }
 
@@ -250,6 +279,7 @@ public class GameServer implements Runnable {
             players.put(id, p);
             out.println("ASSIGNED_ID " + id);
             broadcastPlayerList();
+            //broadcastWalls();
         }
 
         private void disconnect() {
@@ -310,7 +340,7 @@ public class GameServer implements Runnable {
             p.y = pos.y;
         }
 
-        for (ProjectileState proj : projectiles.values()) {
+        for (ServerProjectileState proj : projectiles.values()) {
             if (proj.body == null) continue;
 
             Vector2 pos = proj.body.getPosition();
@@ -323,25 +353,50 @@ public class GameServer implements Runnable {
         for (ClientHandler c : clients.values()) {
             String line;
             while ((line = c.messageQueue.poll()) != null) {
-                if (line.equals("START_GAME") && c == host) {
+                //if (line.equals("START_GAME") && c == host) {
+                if (line.startsWith("START_GAME") && c == host) {
                     serverState = ServerState.GAME;
                     initPhysics();
-                    generateWorldWalls(world);
+                    generateWorldWalls();
+
                     spawnPlayers();
-                    broadcast("GAME_START");
+                    broadcastWalls();
+                    //broadcast("GAME_START");
                     System.out.println("Game started by host.");
                 }
             }
         }
     }
 
-    private void generateWorldWalls(World world) {
+    private int[][] objectMap = {{0,0,0,1,1,0},
+                                 {1,0,0,0,0,0},
+                                 {0,0,1,1,0,0},
+                                 {0,0,0,0,0,0},
+                                 {0,1,0,0,1,0},
+                                 {0,0,0,0,1,0}};
+
+    private void generateWorldWalls() {
         // Create walls around the play area
 //        createWall(0, -(WORLD_HEIGHT * PIXELS_PER_METER) / 2, WORLD_HEIGHT * PIXELS_PER_METER, 10); // Bottom
 //        createWall(0, (WORLD_HEIGHT * PIXELS_PER_METER) / 2, WORLD_HEIGHT * PIXELS_PER_METER, 10);  // Top
 //        createWall(-(WORLD_WIDTH * PIXELS_PER_METER) / 2, 0, 10, WORLD_WIDTH * PIXELS_PER_METER);   // Left
 //        createWall(WORLD_WIDTH * PIXELS_PER_METER / 2, 0, 10, WORLD_WIDTH * PIXELS_PER_METER);    // Right
 
+        ServerWall testWall = new ServerWall();
+        testWall.body = createTestBox();
+        testWall.x = testWall.body.getPosition().x;
+        testWall.y = testWall.body.getPosition().y;
+        testWall.height = 1f;
+        testWall.width = 1f;
+        walls.add(testWall);
+
+//        ServerWall wall = new ServerWall();
+//        wall.body = createWall(1, 1, 1, 2); // Bottom
+//        wall.x = wall.body.getPosition().x;
+//        wall.y = wall.body.getPosition().y;
+//        wall.height = 1f;
+//        wall.width = 2f;
+//        walls.add(wall);
         //createWall((int)WORLD_HEIGHT, 0, 20, 10); // Left
 
         // Additional internal walls can be created here if desired
@@ -360,7 +415,9 @@ public class GameServer implements Runnable {
                     Body body = c.serverPlayerState.body;
                     if (body == null) continue;
 
-                    Vector2 desiredVelocity = new Vector2(dx, dy).scl(Constants.metersToPx(PLAYER_SPEED_MPS));
+                    Vector2 desiredVelocity = new Vector2(dx, dy)
+                        .nor()
+                        .scl(PLAYER_SPEED_MPS);
                     body.setLinearVelocity(desiredVelocity);
                 }
                 if (line.equals("STOP")) {
@@ -373,44 +430,51 @@ public class GameServer implements Runnable {
                     String[] p = line.split(" ");
                     float dx = Float.parseFloat(p[1]);
                     float dy = Float.parseFloat(p[2]);
-                    ProjectileState proj = new ProjectileState();
+                    ServerProjectileState proj = new ServerProjectileState();
                     proj.id = nextProjectileId++;
                     //proj.ownerId = c.id;
 
+//                    Vector2 spawnPos = c.serverPlayerState.body.getPosition()
+//                        .cpy()
+//                        .add(dx, dy)
+//                        .scl(COLLISION_DISTANCE_M * 1.1f);
+
+//                    proj.body = createProjectile(
+//                        spawnPos.x,
+//                        spawnPos.y,
+//                        proj.id
+//                    );
+//                    Vector2 desiredVelocity = new Vector2(dx, dy)
+//                        .nor()
+//                        .scl(BULLET_SPEED_MPS);
+//                    proj.body.setLinearVelocity(desiredVelocity);
+
+                    Vector2 dir = new Vector2(dx, dy).nor();
+
                     Vector2 spawnPos = c.serverPlayerState.body.getPosition()
                         .cpy()
-                        .add(dx * (Constants.metersToPx(COLLISION_DISTANCE_M) + 1.3f), dy * (Constants.metersToPx(COLLISION_DISTANCE_M) + 1.3f));
+                        .add(dir.scl(BULLET_SPAWN_OFFSET_M));
 
                     proj.body = createProjectile(
                         spawnPos.x,
                         spawnPos.y,
-                        //dx * BULLET_SPEED_MPS,
-                        //dy * BULLET_SPEED_MPS,
                         proj.id
                     );
 
-                    Vector2 desiredVelocity = new Vector2(dx, dy).scl(Constants.metersToPx(BULLET_SPEED_MPS));
-                    proj.body.setLinearVelocity(desiredVelocity);
+                    proj.body.setLinearVelocity(
+                        dir.scl(BULLET_SPEED_MPS)
+                    );
 
-//                    Vector2 v = proj.body.getLinearVelocity();
-//                    System.out.println("Projectile: " + v.x + ", " + v.y);
-
-//                    proj.x = c.serverPlayerState.x + dx * 20;
-//                    proj.y = c.serverPlayerState.y + dy * 20;
-//                    proj.vx = dx * 400;
-//                    proj.vy = dy * 400;
-//                    proj.body = createProjectile(proj.x, proj.y, proj.vx, proj.vy, proj.id);
                     projectiles.put(proj.id, proj);
-                    //projectiles.add(proj);
                 }
             }
         }
     }
 
     private void updateProjectiles(float delta) {
-        Iterator<ProjectileState> it = projectiles.values().iterator();
+        Iterator<ServerProjectileState> it = projectiles.values().iterator();
         while (it.hasNext()) {
-            ProjectileState ps = it.next();
+            ServerProjectileState ps = it.next();
             Body body = ps.body;
             if (body == null) continue;
 
@@ -423,7 +487,7 @@ public class GameServer implements Runnable {
 //            Vector2 desiredVelocity = new Vector2(ps.vx, ps.vy).scl(BULLET_SPEED);
 //            body.setLinearVelocity(desiredVelocity);
 
-            if (ps.lifeTime >= ps.lifeTimeLimit || Math.abs(ps.x) > 3000 || Math.abs(ps.y) > 3000) {
+            if (ps.lifeTime >= ps.lifeTimeLimit || Math.abs(ps.x) > 100 || Math.abs(ps.y) > 100) {
                 world.destroyBody(body);
                 it.remove();
             }
@@ -432,6 +496,17 @@ public class GameServer implements Runnable {
 
     private void broadcast(String msg) {
         clients.values().forEach(c -> c.out.println(msg));
+    }
+
+    private void broadcastWalls() {
+        StringBuilder sb = new StringBuilder("GAME_START");
+        for (ServerWall w : walls) {
+            sb.append(" ").append(w.x)
+                .append(" ").append(w.y)
+                .append(" ").append(w.width)
+                .append(" ").append(w.height);
+        }
+        broadcast(sb.toString());
     }
 
     private void broadcastPlayerList() {
@@ -457,7 +532,7 @@ public class GameServer implements Runnable {
                 .append(s.color.b);
         }
         sb.append(" PR");
-        for (ProjectileState p : projectiles.values()) {
+        for (ServerProjectileState p : projectiles.values()) {
             sb.append(" ");
             sb.append(p.id).append(":")
                 .append(p.x).append(":")
@@ -473,8 +548,8 @@ public class GameServer implements Runnable {
         for (ClientHandler c : clients.values()) {
             //c.serverPlayerState = new ServerPlayerState();
             c.serverPlayerState.id = c.id;
-            c.serverPlayerState.x = 100 + i * 80;
-            c.serverPlayerState.y = 200;
+            c.serverPlayerState.x = 1 + i;
+            c.serverPlayerState.y = 3;
             c.serverPlayerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
             c.serverPlayerState.body = createPlayerBody(c.serverPlayerState.x, c.serverPlayerState.y, c.id);
             i++;
