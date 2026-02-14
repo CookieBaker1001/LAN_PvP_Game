@@ -154,6 +154,7 @@ public class LobbyScreen implements Screen {
 //            game.setScreen(new GameScreen(game));
 //        }
         else if (msg.startsWith("GAME_START")) {
+            System.out.println("HELLO!!!");
             receiveWalls(msg);
             game.setScreen(new GameScreen(game));
         } else if (msg.equals("HOST_LEFT")) {

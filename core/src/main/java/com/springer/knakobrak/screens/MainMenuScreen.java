@@ -30,14 +30,10 @@ public class MainMenuScreen implements Screen {
     public MainMenuScreen(LanPvpGame game) {
         this.game = game;
         this.background = new Texture("great_war.png");
-        //this.background = new Texture("libgdx.png");
     }
 
     @Override
     public void show() {
-        // Create UI buttons:
-        // Host -> start GameServer, then game.setScreen(new GameScreen(...))
-        // Join -> input IP, create GameClient
         stage = new Stage(new ExtendViewport(Gdx.graphics.getWidth(), Gdx.graphics.getHeight()));
         Gdx.input.setInputProcessor(stage);
 
@@ -78,42 +74,22 @@ public class MainMenuScreen implements Screen {
         TextButton optionsButton = new TextButton("Options", game.uiSkin);
         table.add(optionsButton).pad(20);
 
-//        TextureAtlas uiAtlas = new TextureAtlas(Gdx.files.internal("ui/uiskin.atlas"));
-//        Skin skin = new Skin(uiAtlas);
-
         hostButton.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
                 game.port = Integer.parseInt(portInput.getText());
                 game.username = nameInput.getText();
                 try {
-                    // 1. Start server
                     game.hostedServer = new GameServer(game.port);
                     game.serverThread = new Thread(game.hostedServer);
                     game.serverThread.start();
-                    // 2. Create client IMMEDIATELY
                     game.client = new GameClient("localhost", game.port);
-                    //game.client.connect();
-                    // 3. Send name
                     game.client.send(game.username);
-                    // 4. Enter lobby
                     game.setScreen(new LobbyScreen(game, true));
                 } catch (IOException e) {
                     statusLabel.setText("Port is busy");
                 }
             }
-
-//            @Override
-//            public void clicked(InputEvent event, float x, float y) {
-//                try {
-//                    GameServer server = new GameServer(Integer.parseInt(portInput.getText()));
-//                    server.run();
-//                    GameClient client = new GameClient("localhost", 54555);
-//                    game.setScreen(new GameScreen(client));
-//                } catch (Exception e) {
-//                    e.printStackTrace();
-//                }
-//            }
         });
 
         joinButton.addListener(new ChangeListener() {
@@ -131,26 +107,6 @@ public class MainMenuScreen implements Screen {
                 }
             }
         });
-
-//        joinButton.addListener(new ClickListener() {
-//            @Override
-//            public void clicked(InputEvent event, float x, float y) {
-//                try {
-//                    GameClient client = new GameClient("192.168.1.100", 54555);
-//                    game.setScreen(new GameScreen(client));
-//                } catch (Exception e) {
-//                    e.printStackTrace();
-//                }
-//            }
-//        });
-
-//        Label test = new Label("UI OK", skin);
-//        test.setPosition(20, 20);
-//        stage.addActor(test);
-
-//        stage.addActor(hostButton);
-//        stage.addActor(joinButton);
-//        stage.addActor(optionsButton);
     }
 
     @Override

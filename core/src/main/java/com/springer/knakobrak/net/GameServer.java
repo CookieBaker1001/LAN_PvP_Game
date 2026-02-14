@@ -236,7 +236,7 @@ public class GameServer implements Runnable {
 
         private int id;
         private String name;
-        private final Socket socket;
+        private Socket socket;
         private BufferedReader in;
         private PrintWriter out;
         private boolean isHost;
@@ -296,6 +296,7 @@ public class GameServer implements Runnable {
             }
             try {
                 socket.close();
+                socket = null;
             } catch (IOException ignored) {}
         }
     }
@@ -512,6 +513,9 @@ public class GameServer implements Runnable {
 
                     projectiles.put(proj.id, proj);
                 }
+                if (line.startsWith("MSG")) {
+                    broadcast(line);
+                }
             }
         }
     }
@@ -609,6 +613,7 @@ public class GameServer implements Runnable {
         host = null;
         try {
             serverSocket.close();
+            serverSocket = null;
         } catch (IOException ignored) {}
     }
 }

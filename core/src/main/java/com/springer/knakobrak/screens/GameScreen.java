@@ -12,8 +12,7 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.util.Constants;
@@ -26,6 +25,7 @@ import jdk.javadoc.internal.doclets.toolkit.builders.ConstantsSummaryBuilder;
 
 import static com.springer.knakobrak.util.Constants.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,6 +44,14 @@ public class GameScreen implements Screen {
     Map<Integer, ProjectileState> projectiles = new HashMap<>();
     Label coordinatesLabel;
 
+    private List<String> consoleMessages;
+    private Label chatLog;
+    private ScrollPane chatScroll;
+    private TextField chatInput;
+    private Table rootTable;
+
+    private boolean chatMode = false;
+
     public GameScreen(LanPvpGame game) {
         this.game = game;
         this.batch = game.batch;
@@ -60,15 +68,38 @@ public class GameScreen implements Screen {
         stage = new Stage(new ExtendViewport(Gdx.graphics.getWidth(), Gdx.graphics.getHeight()));
         Gdx.input.setInputProcessor(stage);
 
-        Table table = new Table();
-        table.setFillParent(true);
-        stage.addActor(table);
+        rootTable = new Table();
+        rootTable.setFillParent(true);
+        stage.addActor(rootTable);
 
-        table.top().left().pad(10);
+        rootTable.top().left().pad(10);
 
         coordinatesLabel = new Label("x: 0.0, y: 0.0", game.uiSkin);
         coordinatesLabel.setFontScale(1.5f);
-        table.add(coordinatesLabel);
+        rootTable.add(coordinatesLabel).top().left();
+
+        chatLog = new Label("", game.uiSkin);
+        chatLog.setWrap(true);
+
+        chatScroll = new ScrollPane(chatLog, game.uiSkin);
+        chatScroll.setFadeScrollBars(false);
+
+        chatInput = new TextField("", game.uiSkin);
+        chatInput.setVisible(false);
+
+        rootTable.bottom().left().pad(10);
+        rootTable.add(chatScroll).width(400).height(150).row();
+        rootTable.add(chatInput).width(400).height(30);
+
+//        consoleMessages = new List<>(game.uiSkin);
+//        chatScroll = new ScrollPane(consoleMessages, game.uiSkin);
+//
+//        rootTable.add(chatScroll)
+//            .width(150)
+//            .height(100)
+//            .left()
+//            .bottom();
+//        rootTable.row();
     }
 
     @Override
@@ -82,7 +113,40 @@ public class GameScreen implements Screen {
         stage.draw();
     }
 
+    private void enterChatMode() {
+        chatInput.setVisible(true);
+        stage.setKeyboardFocus(chatInput);
+    }
+
+    private void exitChatMode() {
+        String msg = chatInput.getText();
+
+        if (!msg.isEmpty()) {
+            // Send to server
+            game.client.send("MSG <" + game.username + ">" + msg);
+            //sendMessageToServer(msg);
+
+            // Optional: show locally
+            //addChatMessage("You: " + msg);
+        }
+
+        chatInput.setText("");
+        chatInput.setVisible(false);
+        stage.unfocusAll();
+    }
+
     private void input(float delta) {
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+            chatMode = !chatMode;
+            if (chatMode) {
+                enterChatMode();
+            }
+            else {
+                exitChatMode();
+            }
+        }
+
         float dx = 0, dy = 0;
 
         if (Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1;
@@ -114,7 +178,7 @@ public class GameScreen implements Screen {
             game.client.send("SHOOT " + mouseDx + " " + mouseDy);
         }
 
-        if (dx != 0 || dy != 0) {
+        if (!chatMode && (dx != 0 || dy != 0)) {
             game.client.send("MOVE " + dx + " " + dy);
 //            PlayerState me = players.get(game.clientId);
 //            System.out.println(me.x + " " + me.y);
@@ -239,6 +303,20 @@ public class GameScreen implements Screen {
             String[] parts = msg.split(" ");
             System.out.println("Player " + parts[1] + " took damage! HP left: " + parts[3]);
         }
+        else if (msg.startsWith("MSG")) {
+            String[] parts = msg.split(" ");
+            addChatMessage(parts[1]);
+        }
+    }
+
+    public void addChatMessage(String message) {
+        chatLog.setText(chatLog.getText() + "\n" + message);
+
+        // Scroll to bottom
+        Gdx.app.postRunnable(() -> {
+            chatScroll.layout();
+            chatScroll.setScrollPercentY(1f);
+        });
     }
 
     private void updateGameState(String msg) {
