@@ -154,7 +154,6 @@ public class LobbyScreen implements Screen {
 //            game.setScreen(new GameScreen(game));
 //        }
         else if (msg.startsWith("GAME_START")) {
-            System.out.println("HELLO!!!");
             receiveWalls(msg);
             game.setScreen(new GameScreen(game));
         } else if (msg.equals("HOST_LEFT")) {
@@ -178,6 +177,7 @@ public class LobbyScreen implements Screen {
             wall.width = width;
             wall.height = height;
             game.walls.add(wall);
+            System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
         }
     }
 

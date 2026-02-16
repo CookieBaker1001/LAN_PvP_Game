@@ -10,6 +10,7 @@ import com.springer.knakobrak.world.server.ServerProjectileState;
 import com.springer.knakobrak.world.server.ServerPlayerState;
 import com.badlogic.gdx.physics.box2d.*;
 import com.springer.knakobrak.world.server.ServerWall;
+//import com.sun.security.ntlm.Server.*;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -158,11 +159,11 @@ public class GameServer implements Runnable {
         return body;
     }
 
-    Body createWall(int x, int y, int height, int width) {
+    Body createWall(float x, float y, int height, int width) {
         BodyDef bd = new BodyDef();
         bd.type = BodyDef.BodyType.StaticBody;
         //bd.position.set(x - width/2f, y - height/2f);
-        bd.position.set(x+0.5f, y+0.5f);
+        bd.position.set(x, y);
 
         Body body = world.createBody(bd);
 
@@ -363,7 +364,14 @@ public class GameServer implements Runnable {
                     serverState = ServerState.GAME;
                     initPhysics();
                     try {
-                        int[][] grid = loadLevel("levels/level1.txt");
+                        int[][] grid = loadLevel("levels/level2.txt");
+                        System.out.println();
+                        for (int i = 0; i < grid.length; i++) {
+                            for (int j = 0; j < grid[0].length; j++) {
+                                System.out.print(grid[i][j]);
+                            }
+                            System.out.println();
+                        }
                         generateWallsFromGrid(grid);
                     } catch (IOException e) {
                         System.out.println("Error loading level: " + e.getMessage());
@@ -421,11 +429,19 @@ public class GameServer implements Runnable {
 
                 String[] parts = line.split("\\s+");
                 int[] row = new int[parts.length];
+                //for (int i = parts.length-1; i >= 0; i--) {
                 for (int i = 0; i < parts.length; i++) {
                     row[i] = Integer.parseInt(parts[i]);
                 }
                 rows.add(row);
             }
+        }
+
+        int tmp[];
+        for (int i = 0; i < rows.size()/2; i++) {
+            tmp = rows.get(i);
+            rows.set(i, rows.get(rows.size()-i-1));
+            rows.set(rows.size()-i-1, tmp);
         }
 
         return rows.toArray(new int[0][]);
@@ -435,33 +451,83 @@ public class GameServer implements Runnable {
         int rows = grid.length;
         int cols = grid[0].length;
 
+        boolean[][] used = new boolean[rows][cols];
+
         for (int y = 0; y < rows; y++) {
             for (int x = 0; x < cols; x++) {
 
-                if (grid[y][x] == 1) {
-//                    float centerX = (x + 0.5f);
-//                    float centerY = (y + 0.5f);
-
-                    Body b = createWall(
-                        x,
-                        y,
-                        1,
-                        1
-                    );
-
-                    ServerWall wall = new ServerWall();
-                    wall.body = b;
-                    wall.x = wall.body.getPosition().x;
-                    wall.y = wall.body.getPosition().y;
-                    wall.height = 1f;
-                    wall.width = 1f;
-                    walls.add(wall);
-                }
-                else if (grid[y][x] == 2) {
+                if (grid[y][x] == 0 || used[y][x]) continue;
+                if (grid[y][x] == 2) {
                     playerSpawnPoints.add(new Vector2(x, y));
+                    continue;
                 }
+
+                int width = 1;
+                while (x + width < cols &&
+                    grid[y][x + width] == 1 &&
+                    !used[y][x + width]) {
+                    width++;
+                }
+
+                // ---- Expand vertically ----
+                int height = 1;
+                boolean canExpand = true;
+                while (y + height < rows && canExpand) {
+
+                    for (int i = 0; i < width; i++) {
+                        if (grid[y + height][x + i] == 0 ||
+                            used[y + height][x + i]) {
+                            canExpand = false;
+                            break;
+                        }
+                    }
+
+                    if (canExpand) height++;
+                }
+
+                for (int dy = 0; dy < height; dy++) {
+                    for (int dx = 0; dx < width; dx++) {
+                        used[y + dy][x + dx] = true;
+                    }
+                }
+
+                createMergedWall(x, y, width, height);
+
+//                if (grid[y][x] == 1) {
+////                    float centerX = (x + 0.5f);
+////                    float centerY = (y + 0.5f);
+//
+//                    Body b = createWall(
+//                        x,
+//                        y,
+//                        1,
+//                        1
+//                    );
+//
+//                    ServerWall wall = new ServerWall();
+//                    wall.body = b;
+//                    wall.x = wall.body.getPosition().x;
+//                    wall.y = wall.body.getPosition().y;
+//                    wall.height = 1f;
+//                    wall.width = 1f;
+//                    walls.add(wall);
+//                }
             }
         }
+    }
+
+    private void createMergedWall(int x, int y, int w, int h) {
+
+        float centerX = (x + w / 2f);
+        float centerY = (y + h / 2f);
+
+        ServerWall wall = new ServerWall();
+        wall.body = createWall(centerX, centerY, h, w);
+        wall.x = wall.body.getPosition().x;
+        wall.y = wall.body.getPosition().y;
+        wall.height = h;
+        wall.width = w;
+        walls.add(wall);
     }
 
     private void processGameInputs() {
