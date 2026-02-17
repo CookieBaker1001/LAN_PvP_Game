@@ -9,6 +9,7 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
 import com.springer.knakobrak.screens.MainMenuScreen;
+import com.springer.knakobrak.world.client.ClientGameState;
 import com.springer.knakobrak.world.client.Wall;
 import com.springer.knakobrak.world.server.ServerWall;
 
@@ -25,13 +26,14 @@ public class LanPvpGame extends Game {
     public boolean inChat;
     public String username = "UNNAMED";
     //public Color playerColor = Color.WHITE;
-    public int clientId;
     public int port = 5000;
 
     public float worldWidth;
     public float worldHeight;
 
     public Array<Wall> walls = new Array<>();
+
+    public ClientGameState gameState;
 
     @Override
     public void create() {

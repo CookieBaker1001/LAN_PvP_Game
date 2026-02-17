@@ -42,6 +42,9 @@ public class GameServer implements Runnable {
 
     ArrayList<Vector2> playerSpawnPoints = new ArrayList<>();
 
+    static int worldHeight = 0;
+    static int worldWidth = 0;
+
     public GameServer(int port) throws IOException {
         this.port = port;
         this.serverSocket = new ServerSocket(port);
@@ -49,6 +52,7 @@ public class GameServer implements Runnable {
 
     enum ServerState {
         LOBBY,
+        LOADING,
         GAME,
         SHUTDOWN
     }
@@ -60,7 +64,7 @@ public class GameServer implements Runnable {
         world.setContactListener(new ContactListener() {
             @Override
             public void beginContact(Contact contact) {
-                System.out.println("Collision detected");
+                //System.out.println("Collision detected");
                 Object a = contact.getFixtureA().getUserData();
                 Object b = contact.getFixtureB().getUserData();
 
@@ -131,7 +135,7 @@ public class GameServer implements Runnable {
         return body;
     }
 
-    Body createProjectile(float x, float y/*, float vx, float vy*/, int projId) {
+    Body createProjectile(float x, float y, int projId) {
         BodyDef bd = new BodyDef();
         bd.type = BodyDef.BodyType.DynamicBody;
         bd.bullet = true;
@@ -265,6 +269,10 @@ public class GameServer implements Runnable {
             }
         }
 
+        public void send(String msg) {
+            out.println(msg);
+        }
+
         private void handshake() throws IOException {
             name = in.readLine();
             id = nextId.getAndIncrement();
@@ -291,7 +299,7 @@ public class GameServer implements Runnable {
             if (this == host) {
                 broadcast("HOST_LEFT");
                 serverState = ServerState.SHUTDOWN;
-                    shutdown();
+                shutdown();
             } else {
                 broadcastPlayerList();
             }
@@ -327,12 +335,50 @@ public class GameServer implements Runnable {
 
 
             } else if (serverState == ServerState.LOBBY) {
-                processMessagesInLobby();
+                try {
+                    processMessagesInLobby();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                    serverState = ServerState.SHUTDOWN;
+                }
+            } else if (serverState == ServerState.LOADING) {
+                //loadingScreen();
+                processMessagesInLoadingScreen();
             }
             try {
                 Thread.sleep(TICK_MS); // ~60 Hz
             } catch (InterruptedException ignored) {}
         }
+    }
+
+    private void loadingScreen() {
+        walls.clear();
+        playerSpawnPoints.clear();
+        initPhysics();
+        try {
+            int[][] grid = loadLevel("levels/level1.txt");
+            System.out.println();
+            for (int i = 0; i < grid.length; i++) {
+                for (int j = 0; j < grid[0].length; j++) {
+                    System.out.print(grid[i][j]);
+                }
+                System.out.println();
+            }
+            generateWallsFromGrid(grid);
+        } catch (IOException e) {
+            System.out.println("Error loading level: " + e.getMessage());
+            e.printStackTrace();
+            serverState = ServerState.LOBBY;
+            return;
+        }
+
+        //generateWorldWalls();
+
+        spawnPlayers();
+        broadcastWalls();
+        //broadcast("GAME_START");
+        System.out.println("Game started by host.");
+        serverState = ServerState.GAME;
     }
 
     private void syncBodiesToGameState() {
@@ -353,41 +399,115 @@ public class GameServer implements Runnable {
         }
     }
 
-    private void processMessagesInLobby() {
+    private void processMessagesInLobby() throws InterruptedException {
         for (ClientHandler c : clients.values()) {
             String line;
             while ((line = c.messageQueue.poll()) != null) {
                 //if (line.equals("START_GAME") && c == host) {
                 if (line.startsWith("START_GAME") && c == host) {
-                    walls.clear();
-                    playerSpawnPoints.clear();
-                    serverState = ServerState.GAME;
-                    initPhysics();
-                    try {
-                        int[][] grid = loadLevel("levels/level2.txt");
-                        System.out.println();
-                        for (int i = 0; i < grid.length; i++) {
-                            for (int j = 0; j < grid[0].length; j++) {
-                                System.out.print(grid[i][j]);
-                            }
-                            System.out.println();
-                        }
-                        generateWallsFromGrid(grid);
-                    } catch (IOException e) {
-                        System.out.println("Error loading level: " + e.getMessage());
-                        e.printStackTrace();
-                        continue;
-                    }
-
-                    //generateWorldWalls();
-
-                    spawnPlayers();
-                    broadcastWalls();
-                    //broadcast("GAME_START");
-                    System.out.println("Game started by host.");
+                    broadcast("ENTER_LOADING");
+                    serverState = ServerState.LOADING;
+                    loadData();
+                    Thread.sleep(500);
+                    sendInitialDataToAllClients();
                 }
             }
         }
+    }
+
+    private void loadData() {
+        walls.clear();
+        playerSpawnPoints.clear();
+        initPhysics();
+        try {
+            int[][] grid = loadLevel("levels/level1.txt");
+            System.out.println();
+            for (int i = 0; i < grid.length; i++) {
+                for (int j = 0; j < grid[0].length; j++) {
+                    System.out.print(grid[i][j]);
+                }
+                System.out.println();
+            }
+            generateWallsFromGrid(grid);
+        } catch (IOException e) {
+            System.out.println("Error loading level: " + e.getMessage());
+            e.printStackTrace();
+            serverState = ServerState.LOBBY;
+            return;
+        }
+
+        spawnPlayers();
+    }
+
+    Set<Integer> readyClients = new HashSet<>();
+    private void processMessagesInLoadingScreen() {
+        for (ClientHandler c : clients.values()) {
+            String line;
+            while ((line = c.messageQueue.poll()) != null) {
+                //if (line.equals("START_GAME") && c == host) {
+                if (line.equals("READY")) {
+                    readyClients.add(c.id);
+                    if (readyClients.size() == clients.size()) {
+                        startGame();
+                    }
+                }
+            }
+        }
+    }
+
+    private void startGame() {
+        serverState = ServerState.GAME;
+        broadcast("START_GAME");
+    }
+
+    private void sendInitialDataToAllClients() {
+        for (ClientHandler c : clients.values()) {
+            sendInitialData(c);
+        }
+    }
+
+    void sendInitialData(ClientHandler c) {
+
+        // Tell client which player it owns
+        //c.send("WELCOME " + c.id);
+
+        // Send player list
+        for (ServerPlayerState p : players.values()) {
+            c.send("INIT_PLAYER " + p.id + " " + p.x + " " + p.y);
+        }
+
+        // Send wall map
+        sendWallLayout(c);
+
+        c.send("INIT_DONE");
+    }
+
+    void sendWallLayout(ClientHandler c) {
+
+        int mapWidth = (int) (worldWidth * PIXELS_PER_METER);
+        int mapHeight = (int) (worldHeight * PIXELS_PER_METER);
+
+        c.send("INIT_MAP " + mapWidth + " " + mapHeight);
+
+        StringBuilder sb = new StringBuilder("INIT_MAP_WALLS");
+        for (ServerWall w : walls) {
+            sb.append(" ").append(w.x)
+                .append(" ").append(w.y)
+                .append(" ").append(w.width)
+                .append(" ").append(w.height);
+        }
+        c.send(sb.toString());
+
+//        for (int y = 0; y < mapHeight; y++) {
+//            StringBuilder row = new StringBuilder("INIT_MAP_ROW ");
+//            row.append(y);
+//
+//            for (int x = 0; x < mapWidth; x++) {
+//                row.append(" ").append(map[y][x]);
+//            }
+//
+//            c.send(row.toString());
+//        }
     }
 
     private void generateWorldWalls() {
@@ -427,7 +547,9 @@ public class GameServer implements Runnable {
                 line = line.trim();
                 if (line.isEmpty()) continue;
 
+                worldHeight++;
                 String[] parts = line.split("\\s+");
+                worldWidth = parts.length;
                 int[] row = new int[parts.length];
                 //for (int i = parts.length-1; i >= 0; i--) {
                 for (int i = 0; i < parts.length; i++) {
@@ -530,6 +652,8 @@ public class GameServer implements Runnable {
         walls.add(wall);
     }
 
+    int lastProcessedInputId;
+
     private void processGameInputs() {
         for (ClientHandler c : clients.values()) {
             String line;
@@ -548,6 +672,19 @@ public class GameServer implements Runnable {
                         .scl(PLAYER_SPEED_MPS);
                     body.setLinearVelocity(desiredVelocity);
                 }
+
+//                if (line.startsWith("MOVE")) {
+//
+//                    int inputId = Integer.parseInt(p[1]);
+//                    float dx = Float.parseFloat(p[2]);
+//                    float dy = Float.parseFloat(p[3]);
+//                    float dt = Float.parseFloat(p[4]);
+//
+//                    applyMovement(c.serverPlayerState.body, dx, dy, dt);
+//
+//                    c.serverPlayerState.lastProcessedInputId = inputId;
+//                }
+
                 if (line.equals("STOP")) {
                     Body body = c.serverPlayerState.body;
                     if (body != null) {

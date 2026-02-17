@@ -13,9 +13,12 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.net.messages.InputCommand;
 import com.springer.knakobrak.util.Constants;
+import com.springer.knakobrak.world.client.ClientGameState;
 import com.springer.knakobrak.world.client.PlayerState;
 import com.springer.knakobrak.world.client.ProjectileState;
 import com.springer.knakobrak.world.client.Wall;
@@ -25,9 +28,7 @@ import jdk.javadoc.internal.doclets.toolkit.builders.ConstantsSummaryBuilder;
 
 import static com.springer.knakobrak.util.Constants.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class GameScreen implements Screen {
 
@@ -38,10 +39,12 @@ public class GameScreen implements Screen {
     private SpriteBatch batch;
     private Texture background;
 
-    public Map<Integer, PlayerState> players = new HashMap<>();
+    private ClientGameState gameState;
+//    public Map<Integer, PlayerState> players = new HashMap<>();
+//    private PlayerState player;
     ShapeRenderer shapeRenderer = new ShapeRenderer();
 
-    Map<Integer, ProjectileState> projectiles = new HashMap<>();
+    //Map<Integer, ProjectileState> projectiles = new HashMap<>();
     Label coordinatesLabel;
 
     private List<String> consoleMessages;
@@ -52,9 +55,15 @@ public class GameScreen implements Screen {
 
     private boolean chatMode = false;
 
+//    int nextInputId = 0;
+//    Queue<InputCommand> pendingInputs = new ArrayDeque<>();
+
+
     public GameScreen(LanPvpGame game) {
         this.game = game;
         this.batch = game.batch;
+        this.gameState = game.gameState;
+        //player = players.get(game.clientId);
     }
 
     @Override
@@ -154,6 +163,16 @@ public class GameScreen implements Screen {
         if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
         if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
 
+//        InputCommand cmd = new InputCommand();
+//        cmd.id = nextInputId++;
+//        cmd.dx = dx;
+//        cmd.dy = dy;
+//        cmd.dt = delta;
+//
+//        pendingInputs.add(cmd);
+
+        //applyMovement(localPlayerBody, cmd);
+
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             Vector3 mouse = new Vector3(
                 Gdx.input.getX(),
@@ -163,11 +182,14 @@ public class GameScreen implements Screen {
 
             camera.unproject(mouse);
 
-            PlayerState me = players.get(game.clientId);
-            if (me == null) return;
+//            PlayerState me = players.get(game.clientId);
+//            if (me == null) return;
 
-            float mouseDx = mouse.x - me.x;
-            float mouseDy = mouse.y - me.y;
+//            float mouseDx = mouse.x - me.x;
+//            float mouseDy = mouse.y - me.y;
+
+            float mouseDx = mouse.x - gameState.localPlayer.x;
+            float mouseDy = mouse.y - gameState.localPlayer.y;
 
             float len = (float)Math.sqrt(mouseDx * mouseDx + mouseDy * mouseDy);
             if (len == 0) return;
@@ -180,17 +202,15 @@ public class GameScreen implements Screen {
 
         if (!chatMode && (dx != 0 || dy != 0)) {
             game.client.send("MOVE " + dx + " " + dy);
-//            PlayerState me = players.get(game.clientId);
-//            System.out.println(me.x + " " + me.y);
         } else {
             game.client.send("STOP");
         }
     }
 
     private void moveCameraToPlayer() {
-        PlayerState me = players.get(game.clientId);
-        if (me != null) {
-            camera.position.set(me.x, me.y, 0);
+        //PlayerState me = players.get(game.clientId);s
+        if (gameState.localPlayer != null) {
+            camera.position.set(gameState.localPlayer.x, gameState.localPlayer.y, 0);
             camera.update();
         }
     }
@@ -245,12 +265,12 @@ public class GameScreen implements Screen {
                 w.height
             );
         }
-        for (PlayerState p : players.values()) {
+        for (PlayerState p : gameState.players.values()) {
             shapeRenderer.setColor(p.color);
             shapeRenderer.circle(p.x, p.y, PLAYER_RADIUS_PX);
         }
         shapeRenderer.setColor(Color.YELLOW);
-        for (ProjectileState p : projectiles.values()) {
+        for (ProjectileState p : gameState.projectiles.values()) {
             shapeRenderer.circle(p.x, p.y, BULLET_RADIUS_PX);
         }
         shapeRenderer.end();
@@ -337,11 +357,11 @@ public class GameScreen implements Screen {
             float r = Float.parseFloat(data[3]);
             float g = Float.parseFloat(data[4]);
             float b = Float.parseFloat(data[5]);
-            PlayerState p = players.get(id);
+            PlayerState p = gameState.players.get(id);
             if (p == null) {
                 p = new PlayerState();
                 p.id = id;
-                players.put(id, p);
+                gameState.players.put(id, p);
             }
             p.x = x;
             p.y = y;
@@ -351,13 +371,13 @@ public class GameScreen implements Screen {
             i++;
 
             //System.out.println("game.clientId: " + game.clientId + ", received player id: " + id);
-            if (id == game.clientId) {
+            if (id == gameState.localPlayerId) {
                 //System.out.println("My position: " + x + " " + y);
                 coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", Constants.pxToMeters(x), Constants.pxToMeters(y)));
             }
         }
 
-        projectiles.clear();
+        gameState.projectiles.clear();
 
         if (i < tokens.length && tokens[i].equals("PR")) {
             i++;
@@ -372,7 +392,7 @@ public class GameScreen implements Screen {
                 p.x = x;
                 p.y = y;
 
-                projectiles.put(id, p);
+                gameState.projectiles.put(id, p);
                 i++;
             }
         }

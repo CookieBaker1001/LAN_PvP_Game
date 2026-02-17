@@ -12,12 +12,14 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.util.Constants;
+import com.springer.knakobrak.world.client.ClientGameState;
 import com.springer.knakobrak.world.client.Wall;
 import com.springer.knakobrak.world.server.ServerWall;
 
 public class LobbyScreen implements Screen {
 
     private final LanPvpGame game;
+    //private ClientGameState gameState;
     private Stage stage;
     private Texture background;
 
@@ -29,6 +31,8 @@ public class LobbyScreen implements Screen {
 
     public LobbyScreen(LanPvpGame game, boolean isHost) {
         this.game = game;
+        game.gameState = new ClientGameState();
+        //this.gameState = game.gameState;
         //game.players.clear();
         this.isHost = isHost;
         this.background = new Texture("final_frontier.jpg");
@@ -141,9 +145,9 @@ public class LobbyScreen implements Screen {
     private void handleMessage(String msg) {
         if (msg.startsWith("ASSIGNED_ID")) {
             String[] data = msg.split(" ");
-            game.clientId = Integer.parseInt(data[1]);
+            game.gameState.localPlayerId = Integer.parseInt(data[1]);
             //game.playerColor = new Color(Float.parseFloat(data[2]), Float.parseFloat(data[3]), Float.parseFloat(data[4]), 1);
-            System.out.println("Assigned ID: " + game.clientId);
+            System.out.println("Assigned ID: " + game.gameState.localPlayerId);
         } else if (msg.startsWith("PLAYER_LIST")) {
             updatePlayerList(msg);
         }
@@ -153,8 +157,11 @@ public class LobbyScreen implements Screen {
 //        else if (msg.equals("GAME_START")) {
 //            game.setScreen(new GameScreen(game));
 //        }
+        else if (msg.equals("ENTER_LOADING")) {
+            game.setScreen(new LoadingScreen(game));
+        }
         else if (msg.startsWith("GAME_START")) {
-            receiveWalls(msg);
+            //receiveWalls(msg);
             game.setScreen(new GameScreen(game));
         } else if (msg.equals("HOST_LEFT")) {
             game.cleanupNetworking();
