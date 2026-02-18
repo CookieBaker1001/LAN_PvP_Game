@@ -5,8 +5,8 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.util.Constants;
-import com.springer.knakobrak.world.client.ClientGameState;
 import com.springer.knakobrak.world.client.PlayerState;
 import com.springer.knakobrak.world.client.Wall;
 
@@ -14,7 +14,7 @@ public class LoadingScreen implements Screen {
 
     private final LanPvpGame game;
     private Texture background;
-    private ClientGameState gameState;
+    //private ClientGameState gameState;
 
     private boolean initDone;
     private boolean gameStart;
@@ -22,7 +22,7 @@ public class LoadingScreen implements Screen {
     public LoadingScreen(LanPvpGame game) {
         this.game = game;
         this.background = new Texture("loadingBG.png");
-        this.gameState = game.gameState;
+        //this.gameState = game.gameState;
 
         initDone = false;
         gameStart = false;
@@ -55,33 +55,31 @@ public class LoadingScreen implements Screen {
 //        stage.draw();
 
         if (initDone && gameStart) {
-
-            gameState.localPlayer =
-                gameState.players.get(
-                    gameState.localPlayerId
+            game.localPlayer =
+                game.simulation.getPlayer(
+                    game.playerId
                 );
-
             game.setScreen(new GameScreen(game));
         }
     }
 
     private void handleMessage(String msg) {
         if (msg.startsWith("INIT_PLAYER")) {
-            System.out.println("INIT_PLAYER");
+            //System.out.println("INIT_PLAYER");
             receivePlayerData(msg);
         } else if (msg.startsWith("INIT_MAP ")) {
-            System.out.println("INIT_MAP");
+            //System.out.println("INIT_MAP");
             String[] parts = msg.split(" ");
-            System.out.println("Dimensions: " + parts[1] + "x" + parts[2]);
+            //System.out.println("Dimensions: " + parts[1] + "x" + parts[2]);
         } else if (msg.startsWith("INIT_MAP_WALLS")) {
-            System.out.println("INIT_MAP_WALLS");
+            //System.out.println("INIT_MAP_WALLS");
             receiveWalls(msg);
         } else if (msg.equals("INIT_DONE")) {
-            System.out.println("INIT_DONE");
+            //System.out.println("INIT_DONE");
             initDone = true;
             game.client.send("READY");
         } else if (msg.equals("START_GAME")) {
-            System.out.println("START_GAME");
+            //System.out.println("START_GAME");
             gameStart = true;
         }
     }
@@ -95,13 +93,21 @@ public class LoadingScreen implements Screen {
         newPlayer.id = id;
         newPlayer.x = x;
         newPlayer.y = y;
-        gameState.players.put(id, newPlayer);
+        newPlayer.body = LoadUtillities.createPlayerBody(game.simulation.world, x, y, id);
+        game.simulation.players.put(id, newPlayer);
+//        if (id == game.playerId) {
+//            game.localPlayer = newPlayer;
+//        }
+        System.out.println("Added player with id " + id);
+        //gameState.players.put(id, newPlayer);
     }
 
     private void receiveWalls(String msg) {
+        System.out.println(msg);
         String[] parts = msg.split(" ");
-        System.out.println("Received walls: " + msg);
-        game.walls.clear();
+        //System.out.println("Received walls: " + msg);
+        game.simulation.clearWalls();
+        //gameState.walls.clear();
         for (int i = 1; i < parts.length; i += 4) {
             float x = Constants.metersToPx(Float.parseFloat(parts[i]));
             float y = Constants.metersToPx(Float.parseFloat(parts[i + 1]));
@@ -112,7 +118,8 @@ public class LoadingScreen implements Screen {
             wall.y = y;
             wall.width = width;
             wall.height = height;
-            game.walls.add(wall);
+            game.simulation.addWall(wall);
+            //gameState.walls.add(wall);
             System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
         }
     }

@@ -3,13 +3,12 @@ package com.springer.knakobrak.net;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.utils.Array;
-import com.springer.knakobrak.util.Constants;
-import com.springer.knakobrak.world.PlayerStateDTO;
-import com.springer.knakobrak.world.server.ServerProjectileState;
-import com.springer.knakobrak.world.server.ServerPlayerState;
+import com.springer.knakobrak.util.LoadUtillities;
+import com.springer.knakobrak.world.PhysicsSimulation;
+import com.springer.knakobrak.world.client.PlayerState;
+import com.springer.knakobrak.world.client.ProjectileState;
+import com.springer.knakobrak.world.client.Wall;
 import com.badlogic.gdx.physics.box2d.*;
-import com.springer.knakobrak.world.server.ServerWall;
 //import com.sun.security.ntlm.Server.*;
 
 import java.io.*;
@@ -31,16 +30,10 @@ public class GameServer implements Runnable {
 
     private ClientHandler host;
     private static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
-    private static Map<Integer, ServerPlayerState> players = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(1);
 
-    private static Map<Integer, ServerProjectileState> projectiles = new ConcurrentHashMap<>();
+    private PhysicsSimulation simulation;
     private int nextProjectileId = 1;
-
-    World world;
-    private static Array<ServerWall> walls = new Array<>();
-
-    ArrayList<Vector2> playerSpawnPoints = new ArrayList<>();
 
     static int worldHeight = 0;
     static int worldWidth = 0;
@@ -48,6 +41,7 @@ public class GameServer implements Runnable {
     public GameServer(int port) throws IOException {
         this.port = port;
         this.serverSocket = new ServerSocket(port);
+        simulation = new PhysicsSimulation();
     }
 
     enum ServerState {
@@ -59,159 +53,7 @@ public class GameServer implements Runnable {
 
     volatile ServerState serverState = ServerState.LOBBY;
 
-    void initPhysics() {
-        world = new World(new Vector2(0, 0), true);
-        world.setContactListener(new ContactListener() {
-            @Override
-            public void beginContact(Contact contact) {
-                //System.out.println("Collision detected");
-                Object a = contact.getFixtureA().getUserData();
-                Object b = contact.getFixtureB().getUserData();
 
-                handleCollision(a, b);
-            }
-
-            public void endContact(Contact contact) {}
-            public void preSolve(Contact contact, Manifold oldManifold) {}
-            public void postSolve(Contact contact, ContactImpulse impulse) {}
-        });
-    }
-
-    void handleCollision(Object a, Object b) {
-        if (a instanceof Integer && b instanceof Integer) {
-            int idA = (int) a;
-            int idB = (int) b;
-
-            if (isProjectile(idA) && isPlayer(idB)) {
-                hitPlayer(idB, idA);
-            } else if (isProjectile(idB) && isPlayer(idA)) {
-                hitPlayer(idA, idB);
-            }
-        }
-    }
-
-    boolean isPlayer(int id) {
-        return players.containsKey(id);
-    }
-
-    boolean isProjectile(int id) {
-        return projectiles.containsKey(id);
-    }
-
-    void hitPlayer(int playerId, int projectileId) {
-        //removeProjectile(projectileId);
-        //projectiles.get(projectileId).isDead = true;
-        //damagePlayer(playerId);
-        players.values().forEach(player -> {
-            if (player.id == playerId) {
-                player.hp--;
-                broadcast("DAMAGE " + playerId + " _now_has " + player.hp + " HP.");
-                //System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
-            }
-        });
-    }
-
-    Body createPlayerBody(float x, float y, int playerId) {
-        BodyDef bd = new BodyDef();
-        bd.type = BodyDef.BodyType.DynamicBody;
-        bd.position.set(x, y);
-
-        Body body = world.createBody(bd);
-
-        CircleShape shape = new CircleShape();
-        shape.setRadius(PLAYER_RADIUS_M);
-
-        FixtureDef fd = new FixtureDef();
-        fd.shape = shape;
-        fd.density = 1f;
-        fd.friction = 0f;
-        fd.restitution = 0.4f;
-
-        Fixture f = body.createFixture(fd);
-        f.setUserData(playerId);
-
-        shape.dispose();
-
-        return body;
-    }
-
-    Body createProjectile(float x, float y, int projId) {
-        BodyDef bd = new BodyDef();
-        bd.type = BodyDef.BodyType.DynamicBody;
-        bd.bullet = true;
-        bd.position.set(x, y);
-
-        Body body = world.createBody(bd);
-
-        CircleShape shape = new CircleShape();
-        shape.setRadius(BULLET_RADIUS_M);
-
-        FixtureDef fd = new FixtureDef();
-        fd.shape = shape;
-        fd.density = 1f;
-        fd.friction = 0f;
-        fd.restitution = 1f;
-
-        //fd.isSensor = true; // IMPORTANT for bullets
-
-        Fixture f = body.createFixture(fd);
-        f.setUserData(projId);
-
-        //body.setLinearVelocity(vx, vy);
-
-        shape.dispose();
-        return body;
-    }
-
-    Body createWall(float x, float y, int height, int width) {
-        BodyDef bd = new BodyDef();
-        bd.type = BodyDef.BodyType.StaticBody;
-        //bd.position.set(x - width/2f, y - height/2f);
-        bd.position.set(x, y);
-
-        Body body = world.createBody(bd);
-
-        PolygonShape shape = new PolygonShape();
-        shape.setAsBox(width / 2f, height / 2f);
-        //shape.setAsBox(width, height);
-
-        FixtureDef fd = new FixtureDef();
-        fd.shape = shape;
-        fd.density = 0f;
-        fd.friction = 0f;
-        fd.restitution = 0f;
-
-        body.createFixture(fd);
-        body.setFixedRotation(true);
-        shape.dispose();
-        return body;
-    }
-
-    Body createTestBox() {
-        BodyDef bd = new BodyDef();
-        bd.type = BodyDef.BodyType.StaticBody;
-
-        // position is CENTER of the box, in meters
-        bd.position.set(2f + 0.5f, 2f + 0.5f);
-
-        Body body = world.createBody(bd);
-
-        PolygonShape shape = new PolygonShape();
-
-        // setAsBox takes HALF-width and HALF-height (meters)
-        shape.setAsBox(0.5f, 0.5f); // 1m × 1m total
-
-        FixtureDef fd = new FixtureDef();
-        fd.shape = shape;
-        fd.density = 0f;
-        fd.friction = 0f;
-        fd.restitution = 0f;
-
-        body.createFixture(fd);
-        shape.dispose();
-
-        return body;
-    }
 
     @Override
     public void run() {
@@ -247,7 +89,7 @@ public class GameServer implements Runnable {
         private boolean isHost;
 
         private final Queue<String> messageQueue = new ConcurrentLinkedQueue<>();
-        public ServerPlayerState serverPlayerState;
+        public PlayerState playerState;
 
         ClientHandler(Socket socket) throws IOException {
             this.socket = socket;
@@ -261,10 +103,15 @@ public class GameServer implements Runnable {
                 handshake();
                 String line;
                 while ((line = in.readLine()) != null) {
+                    //System.out.println("Hi");
                     messageQueue.add(line); // thread-safe queue
                 }
-            } catch (IOException ignored) {
+                //System.out.println("Done...");
+            } catch (IOException e) {
+                //System.out.println("Something went wrong!");
+                e.printStackTrace();
             } finally {
+                //System.out.println("Finally...");
                 disconnect();
             }
         }
@@ -278,24 +125,31 @@ public class GameServer implements Runnable {
             id = nextId.getAndIncrement();
             if (clients.isEmpty()) {
                 host = this;
-                host.isHost = true;
+                this.isHost = true;
             }
-            ServerPlayerState p = new ServerPlayerState();
+            PlayerState p = new PlayerState();
+            //host.isHost = true;
             p.id = id;
             p.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
 
-            this.serverPlayerState = p;
+            this.playerState = p;
 
             clients.put(id, this);
-            players.put(id, p);
+            try {
+                simulation.players.put(id, p);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             out.println("ASSIGNED_ID " + id);
             broadcastPlayerList();
             //broadcastWalls();
         }
 
         private void disconnect() {
+            System.out.println("Disconnecting!");
             clients.remove(id);
-            players.remove(id);
+            simulation.removePlayer(id);
+            //simulation.players.remove(id);
             if (this == host) {
                 broadcast("HOST_LEFT");
                 serverState = ServerState.SHUTDOWN;
@@ -328,10 +182,10 @@ public class GameServer implements Runnable {
                 processGameInputs();
                 updateProjectiles(delta);
 
-                world.step(dt, 6, 2);
+                simulation.step(dt, 6, 2);
 
                 syncBodiesToGameState();
-                broadcastGameState();
+                //broadcastGameState();
 
 
             } else if (serverState == ServerState.LOBBY) {
@@ -351,38 +205,8 @@ public class GameServer implements Runnable {
         }
     }
 
-    private void loadingScreen() {
-        walls.clear();
-        playerSpawnPoints.clear();
-        initPhysics();
-        try {
-            int[][] grid = loadLevel("levels/level1.txt");
-            System.out.println();
-            for (int i = 0; i < grid.length; i++) {
-                for (int j = 0; j < grid[0].length; j++) {
-                    System.out.print(grid[i][j]);
-                }
-                System.out.println();
-            }
-            generateWallsFromGrid(grid);
-        } catch (IOException e) {
-            System.out.println("Error loading level: " + e.getMessage());
-            e.printStackTrace();
-            serverState = ServerState.LOBBY;
-            return;
-        }
-
-        //generateWorldWalls();
-
-        spawnPlayers();
-        broadcastWalls();
-        //broadcast("GAME_START");
-        System.out.println("Game started by host.");
-        serverState = ServerState.GAME;
-    }
-
     private void syncBodiesToGameState() {
-        for (ServerPlayerState p : players.values()) {
+        for (PlayerState p : simulation.players.values()) {
             if (p.body == null) continue;
 
             Vector2 pos = p.body.getPosition();
@@ -390,7 +214,7 @@ public class GameServer implements Runnable {
             p.y = pos.y;
         }
 
-        for (ServerProjectileState proj : projectiles.values()) {
+        for (ProjectileState proj : simulation.projectiles.values()) {
             if (proj.body == null) continue;
 
             Vector2 pos = proj.body.getPosition();
@@ -407,7 +231,9 @@ public class GameServer implements Runnable {
                 if (line.startsWith("START_GAME") && c == host) {
                     broadcast("ENTER_LOADING");
                     serverState = ServerState.LOADING;
+                    simulation.initPhysics();
                     loadData();
+                    spawnPlayers();
                     Thread.sleep(500);
                     sendInitialDataToAllClients();
                 }
@@ -416,11 +242,10 @@ public class GameServer implements Runnable {
     }
 
     private void loadData() {
-        walls.clear();
-        playerSpawnPoints.clear();
-        initPhysics();
+//        simulation.clearWalls();
+//        simulation.clearPlayerSpawnPoints();
         try {
-            int[][] grid = loadLevel("levels/level1.txt");
+            int[][] grid = LoadUtillities.loadLevel("levels/level1.txt");
             System.out.println();
             for (int i = 0; i < grid.length; i++) {
                 for (int j = 0; j < grid[0].length; j++) {
@@ -428,15 +253,14 @@ public class GameServer implements Runnable {
                 }
                 System.out.println();
             }
-            generateWallsFromGrid(grid);
+            LoadUtillities.generateWallsFromGrid(simulation.world, grid);
+            simulation.playerSpawnPoints = LoadUtillities.getPlayerSpawnPoints(grid);
         } catch (IOException e) {
             System.out.println("Error loading level: " + e.getMessage());
             e.printStackTrace();
             serverState = ServerState.LOBBY;
-            return;
+            //return;
         }
-
-        spawnPlayers();
     }
 
     Set<Integer> readyClients = new HashSet<>();
@@ -472,7 +296,7 @@ public class GameServer implements Runnable {
         //c.send("WELCOME " + c.id);
 
         // Send player list
-        for (ServerPlayerState p : players.values()) {
+        for (PlayerState p : simulation.players.values()) {
             c.send("INIT_PLAYER " + p.id + " " + p.x + " " + p.y);
         }
 
@@ -490,7 +314,7 @@ public class GameServer implements Runnable {
         c.send("INIT_MAP " + mapWidth + " " + mapHeight);
 
         StringBuilder sb = new StringBuilder("INIT_MAP_WALLS");
-        for (ServerWall w : walls) {
+        for (Wall w : simulation.walls) {
             sb.append(" ").append(w.x)
                 .append(" ").append(w.y)
                 .append(" ").append(w.width)
@@ -510,148 +334,6 @@ public class GameServer implements Runnable {
 //        }
     }
 
-    private void generateWorldWalls() {
-        // Create walls around the play area
-//        createWall(0, -(WORLD_HEIGHT * PIXELS_PER_METER) / 2, WORLD_HEIGHT * PIXELS_PER_METER, 10); // Bottom
-//        createWall(0, (WORLD_HEIGHT * PIXELS_PER_METER) / 2, WORLD_HEIGHT * PIXELS_PER_METER, 10);  // Top
-//        createWall(-(WORLD_WIDTH * PIXELS_PER_METER) / 2, 0, 10, WORLD_WIDTH * PIXELS_PER_METER);   // Left
-//        createWall(WORLD_WIDTH * PIXELS_PER_METER / 2, 0, 10, WORLD_WIDTH * PIXELS_PER_METER);    // Right
-
-        ServerWall testWall = new ServerWall();
-        //testWall.body = createTestBox();
-        testWall.body = createWall(1, 1, 1, 1);
-        testWall.x = testWall.body.getPosition().x;
-        testWall.y = testWall.body.getPosition().y;
-        testWall.height = 1f;
-        testWall.width = 1f;
-        walls.add(testWall);
-
-//        ServerWall wall = new ServerWall();
-//        wall.body = createWall(1, 1, 1, 2); // Bottom
-//        wall.x = wall.body.getPosition().x;
-//        wall.y = wall.body.getPosition().y;
-//        wall.height = 1f;
-//        wall.width = 2f;
-//        walls.add(wall);
-        //createWall((int)WORLD_HEIGHT, 0, 20, 10); // Left
-
-        // Additional internal walls can be created here if desired
-    }
-
-    static int[][] loadLevel(String path) throws IOException {
-        List<int[]> rows = new ArrayList<>();
-
-        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                line = line.trim();
-                if (line.isEmpty()) continue;
-
-                worldHeight++;
-                String[] parts = line.split("\\s+");
-                worldWidth = parts.length;
-                int[] row = new int[parts.length];
-                //for (int i = parts.length-1; i >= 0; i--) {
-                for (int i = 0; i < parts.length; i++) {
-                    row[i] = Integer.parseInt(parts[i]);
-                }
-                rows.add(row);
-            }
-        }
-
-        int tmp[];
-        for (int i = 0; i < rows.size()/2; i++) {
-            tmp = rows.get(i);
-            rows.set(i, rows.get(rows.size()-i-1));
-            rows.set(rows.size()-i-1, tmp);
-        }
-
-        return rows.toArray(new int[0][]);
-    }
-
-    private void generateWallsFromGrid(int[][] grid) {
-        int rows = grid.length;
-        int cols = grid[0].length;
-
-        boolean[][] used = new boolean[rows][cols];
-
-        for (int y = 0; y < rows; y++) {
-            for (int x = 0; x < cols; x++) {
-
-                if (grid[y][x] == 0 || used[y][x]) continue;
-                if (grid[y][x] == 2) {
-                    playerSpawnPoints.add(new Vector2(x, y));
-                    continue;
-                }
-
-                int width = 1;
-                while (x + width < cols &&
-                    grid[y][x + width] == 1 &&
-                    !used[y][x + width]) {
-                    width++;
-                }
-
-                // ---- Expand vertically ----
-                int height = 1;
-                boolean canExpand = true;
-                while (y + height < rows && canExpand) {
-
-                    for (int i = 0; i < width; i++) {
-                        if (grid[y + height][x + i] == 0 ||
-                            used[y + height][x + i]) {
-                            canExpand = false;
-                            break;
-                        }
-                    }
-
-                    if (canExpand) height++;
-                }
-
-                for (int dy = 0; dy < height; dy++) {
-                    for (int dx = 0; dx < width; dx++) {
-                        used[y + dy][x + dx] = true;
-                    }
-                }
-
-                createMergedWall(x, y, width, height);
-
-//                if (grid[y][x] == 1) {
-////                    float centerX = (x + 0.5f);
-////                    float centerY = (y + 0.5f);
-//
-//                    Body b = createWall(
-//                        x,
-//                        y,
-//                        1,
-//                        1
-//                    );
-//
-//                    ServerWall wall = new ServerWall();
-//                    wall.body = b;
-//                    wall.x = wall.body.getPosition().x;
-//                    wall.y = wall.body.getPosition().y;
-//                    wall.height = 1f;
-//                    wall.width = 1f;
-//                    walls.add(wall);
-//                }
-            }
-        }
-    }
-
-    private void createMergedWall(int x, int y, int w, int h) {
-
-        float centerX = (x + w / 2f);
-        float centerY = (y + h / 2f);
-
-        ServerWall wall = new ServerWall();
-        wall.body = createWall(centerX, centerY, h, w);
-        wall.x = wall.body.getPosition().x;
-        wall.y = wall.body.getPosition().y;
-        wall.height = h;
-        wall.width = w;
-        walls.add(wall);
-    }
-
     int lastProcessedInputId;
 
     private void processGameInputs() {
@@ -664,7 +346,7 @@ public class GameServer implements Runnable {
                     float dx = Float.parseFloat(p[1]);
                     float dy = Float.parseFloat(p[2]);
 
-                    Body body = c.serverPlayerState.body;
+                    Body body = c.playerState.body;
                     if (body == null) continue;
 
                     Vector2 desiredVelocity = new Vector2(dx, dy)
@@ -672,39 +354,27 @@ public class GameServer implements Runnable {
                         .scl(PLAYER_SPEED_MPS);
                     body.setLinearVelocity(desiredVelocity);
                 }
-
-//                if (line.startsWith("MOVE")) {
-//
-//                    int inputId = Integer.parseInt(p[1]);
-//                    float dx = Float.parseFloat(p[2]);
-//                    float dy = Float.parseFloat(p[3]);
-//                    float dt = Float.parseFloat(p[4]);
-//
-//                    applyMovement(c.serverPlayerState.body, dx, dy, dt);
-//
-//                    c.serverPlayerState.lastProcessedInputId = inputId;
-//                }
-
-                if (line.equals("STOP")) {
-                    Body body = c.serverPlayerState.body;
+                else if (line.equals("STOP")) {
+                    Body body = c.playerState.body;
                     if (body != null) {
                         body.setLinearVelocity(0, 0);
                     }
                 }
-                if (line.startsWith("SHOOT")) {
+                else if (line.startsWith("SHOOT")) {
                     String[] p = line.split(" ");
                     float dx = Float.parseFloat(p[1]);
                     float dy = Float.parseFloat(p[2]);
-                    ServerProjectileState proj = new ServerProjectileState();
+                    ProjectileState proj = new ProjectileState();
                     proj.id = nextProjectileId++;
                     //proj.ownerId = c.id;
                     Vector2 dir = new Vector2(dx, dy).nor();
 
-                    Vector2 spawnPos = c.serverPlayerState.body.getPosition()
+                    Vector2 spawnPos = c.playerState.body.getPosition()
                         .cpy()
                         .add(dir.scl(BULLET_SPAWN_OFFSET_M));
 
-                    proj.body = createProjectile(
+                    proj.body = LoadUtillities.createProjectile(
+                        simulation.world,
                         spawnPos.x,
                         spawnPos.y,
                         proj.id
@@ -714,9 +384,9 @@ public class GameServer implements Runnable {
                         dir.scl(BULLET_SPEED_MPS)
                     );
 
-                    projectiles.put(proj.id, proj);
+                    simulation.projectiles.put(proj.id, proj);
                 }
-                if (line.startsWith("MSG")) {
+                else if (line.startsWith("MSG")) {
                     broadcast(line);
                 }
             }
@@ -724,9 +394,9 @@ public class GameServer implements Runnable {
     }
 
     private void updateProjectiles(float delta) {
-        Iterator<ServerProjectileState> it = projectiles.values().iterator();
+        Iterator<ProjectileState> it = simulation.projectiles.values().iterator();
         while (it.hasNext()) {
-            ServerProjectileState ps = it.next();
+            ProjectileState ps = it.next();
             Body body = ps.body;
             if (body == null) continue;
 
@@ -740,7 +410,7 @@ public class GameServer implements Runnable {
 //            body.setLinearVelocity(desiredVelocity);
 
             if (ps.lifeTime >= ps.lifeTimeLimit || Math.abs(ps.x) > 100 || Math.abs(ps.y) > 100) {
-                world.destroyBody(body);
+                simulation.world.destroyBody(body);
                 it.remove();
             }
         }
@@ -752,7 +422,7 @@ public class GameServer implements Runnable {
 
     private void broadcastWalls() {
         StringBuilder sb = new StringBuilder("GAME_START");
-        for (ServerWall w : walls) {
+        for (Wall w : simulation.walls) {
             sb.append(" ").append(w.x)
                 .append(" ").append(w.y)
                 .append(" ").append(w.width)
@@ -774,17 +444,17 @@ public class GameServer implements Runnable {
     private void broadcastGameState() {
         StringBuilder sb = new StringBuilder("STATE P");
         for (ClientHandler c : clients.values()) {
-            PlayerStateDTO s = PlayerStateDTO.FromServerToDTO(c.serverPlayerState);
+            //PlayerStateDTO s = PlayerStateDTO.FromServerToDTO(c.playerState);
             sb.append(" ")
-                .append(s.id).append(":")
-                .append(s.x).append(":")
-                .append(s.y).append(":")
-                .append(s.color.r).append(":")
-                .append(s.color.g).append(":")
-                .append(s.color.b);
+                .append(c.id).append(":")
+                .append(c.playerState.x).append(":")
+                .append(c.playerState.y).append(":")
+                .append(c.playerState.color.r).append(":")
+                .append(c.playerState.color.g).append(":")
+                .append(c.playerState.color.b);
         }
         sb.append(" PR");
-        for (ServerProjectileState p : projectiles.values()) {
+        for (ProjectileState p : simulation.projectiles.values()) {
             sb.append(" ");
             sb.append(p.id).append(":")
                 .append(p.x).append(":")
@@ -799,11 +469,11 @@ public class GameServer implements Runnable {
         int i = 0;
         for (ClientHandler c : clients.values()) {
             //c.serverPlayerState = new ServerPlayerState();
-            c.serverPlayerState.id = c.id;
-            c.serverPlayerState.x = playerSpawnPoints.get(i).x + 0.5f;
-            c.serverPlayerState.y = playerSpawnPoints.get(i).y + 0.5f;
-            c.serverPlayerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
-            c.serverPlayerState.body = createPlayerBody(c.serverPlayerState.x, c.serverPlayerState.y, c.id);
+            c.playerState.id = c.id;
+            c.playerState.x = simulation.playerSpawnPoints.get(i).x + 0.5f;
+            c.playerState.y = simulation.playerSpawnPoints.get(i).y + 0.5f;
+            c.playerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
+            c.playerState.body = LoadUtillities.createPlayerBody(simulation.world, c.playerState.x, c.playerState.y, c.id);
             i++;
         }
     }
@@ -812,7 +482,7 @@ public class GameServer implements Runnable {
         running = false;
         clients.values().forEach(ClientHandler::disconnect);
         clients.clear();
-        players.clear();
+        simulation.players.clear();
         host = null;
         try {
             serverSocket.close();

@@ -4,14 +4,12 @@ import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
+import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.screens.MainMenuScreen;
-import com.springer.knakobrak.world.client.ClientGameState;
-import com.springer.knakobrak.world.client.Wall;
-import com.springer.knakobrak.world.server.ServerWall;
+import com.springer.knakobrak.world.client.PlayerState;
 
 
 public class LanPvpGame extends Game {
@@ -19,9 +17,12 @@ public class LanPvpGame extends Game {
     public Skin uiSkin;
     public FitViewport viewport;
 
-    public GameClient client; // <-- lives here
+    public GameClient client;
     public GameServer hostedServer;
     public Thread serverThread;
+
+    public PlayerState localPlayer;
+    public int playerId;
 
     public boolean inChat;
     public String username = "UNNAMED";
@@ -31,9 +32,8 @@ public class LanPvpGame extends Game {
     public float worldWidth;
     public float worldHeight;
 
-    public Array<Wall> walls = new Array<>();
-
-    public ClientGameState gameState;
+    //public ClientGameState gameState;
+    public PhysicsSimulation simulation;
 
     @Override
     public void create() {
@@ -55,6 +55,8 @@ public class LanPvpGame extends Game {
         //font has 15pt, but we need to scale it to our viewport by ratio of viewport height to screen height
         //font.setUseIntegerPositions(false);
         //font.getData().setScale(viewport.getWorldHeight() / Gdx.graphics.getHeight());
+
+        this.simulation = new PhysicsSimulation();
 
         this.setScreen(new MainMenuScreen(this));
     }

@@ -11,10 +11,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
-import com.springer.knakobrak.util.Constants;
-import com.springer.knakobrak.world.client.ClientGameState;
-import com.springer.knakobrak.world.client.Wall;
-import com.springer.knakobrak.world.server.ServerWall;
+import com.springer.knakobrak.world.PhysicsSimulation;
 
 public class LobbyScreen implements Screen {
 
@@ -29,9 +26,13 @@ public class LobbyScreen implements Screen {
     private ScrollPane playerScrollPane;
     private Table rootTable;
 
+
+    private PhysicsSimulation simulation;
+
     public LobbyScreen(LanPvpGame game, boolean isHost) {
         this.game = game;
-        game.gameState = new ClientGameState();
+        //game.gameState = new ClientGameState();
+        this.simulation = game.simulation;
         //this.gameState = game.gameState;
         //game.players.clear();
         this.isHost = isHost;
@@ -145,9 +146,11 @@ public class LobbyScreen implements Screen {
     private void handleMessage(String msg) {
         if (msg.startsWith("ASSIGNED_ID")) {
             String[] data = msg.split(" ");
-            game.gameState.localPlayerId = Integer.parseInt(data[1]);
+            game.playerId = Integer.parseInt(data[1]);
+            //game.gameState.localPlayerId = Integer.parseInt(data[1]);
             //game.playerColor = new Color(Float.parseFloat(data[2]), Float.parseFloat(data[3]), Float.parseFloat(data[4]), 1);
-            System.out.println("Assigned ID: " + game.gameState.localPlayerId);
+            //System.out.println("Assigned ID: " + game.gameState.localPlayerId);
+            System.out.println("Assigned ID: " + game.playerId);
         } else if (msg.startsWith("PLAYER_LIST")) {
             updatePlayerList(msg);
         }
@@ -158,6 +161,7 @@ public class LobbyScreen implements Screen {
 //            game.setScreen(new GameScreen(game));
 //        }
         else if (msg.equals("ENTER_LOADING")) {
+            simulation.initPhysics();
             game.setScreen(new LoadingScreen(game));
         }
         else if (msg.startsWith("GAME_START")) {
@@ -169,28 +173,28 @@ public class LobbyScreen implements Screen {
         }
     }
 
-    private void receiveWalls(String msg) {
-        String[] parts = msg.split(" ");
-        System.out.println("Received walls: " + msg);
-        game.walls.clear();
-        for (int i = 1; i < parts.length; i += 4) {
-            float x = Constants.metersToPx(Float.parseFloat(parts[i]));
-            float y = Constants.metersToPx(Float.parseFloat(parts[i + 1]));
-            float width = Constants.metersToPx(Float.parseFloat(parts[i + 2]));
-            float height = Constants.metersToPx(Float.parseFloat(parts[i + 3]));
-            Wall wall = new Wall();
-            wall.x = x;
-            wall.y = y;
-            wall.width = width;
-            wall.height = height;
-            game.walls.add(wall);
-            System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
-        }
-    }
+//    private void receiveWalls(String msg) {
+//        String[] parts = msg.split(" ");
+//        System.out.println("Received walls: " + msg);
+//        game.gameState.walls.clear();
+//        for (int i = 1; i < parts.length; i += 4) {
+//            float x = Constants.metersToPx(Float.parseFloat(parts[i]));
+//            float y = Constants.metersToPx(Float.parseFloat(parts[i + 1]));
+//            float width = Constants.metersToPx(Float.parseFloat(parts[i + 2]));
+//            float height = Constants.metersToPx(Float.parseFloat(parts[i + 3]));
+//            Wall wall = new Wall();
+//            wall.x = x;
+//            wall.y = y;
+//            wall.width = width;
+//            wall.height = height;
+//            game.gameState.walls.add(wall);
+//            System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
+//        }
+//    }
 
     private void updatePlayerList(String msg) {
         // Update player list UI
-        System.out.println("Received player list: " + msg);
+        //System.out.println("Received player list: " + msg);
         String[] parts = msg.split("_");
         Array<String> names = new Array<>();
         for (int i = 1; i < parts.length; i++) {

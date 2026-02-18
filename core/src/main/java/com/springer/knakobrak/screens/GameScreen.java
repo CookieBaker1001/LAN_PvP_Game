@@ -16,15 +16,13 @@ import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.util.LoadUtillities;
+import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.net.messages.InputCommand;
 import com.springer.knakobrak.util.Constants;
-import com.springer.knakobrak.world.client.ClientGameState;
 import com.springer.knakobrak.world.client.PlayerState;
 import com.springer.knakobrak.world.client.ProjectileState;
 import com.springer.knakobrak.world.client.Wall;
-import com.springer.knakobrak.world.server.ServerProjectileState;
-import com.sun.org.apache.bcel.internal.Const;
-import jdk.javadoc.internal.doclets.toolkit.builders.ConstantsSummaryBuilder;
 
 import static com.springer.knakobrak.util.Constants.*;
 
@@ -39,14 +37,9 @@ public class GameScreen implements Screen {
     private SpriteBatch batch;
     private Texture background;
 
-    private ClientGameState gameState;
-//    public Map<Integer, PlayerState> players = new HashMap<>();
-//    private PlayerState player;
-    ShapeRenderer shapeRenderer = new ShapeRenderer();
+    private ShapeRenderer shapeRenderer = new ShapeRenderer();
 
-    //Map<Integer, ProjectileState> projectiles = new HashMap<>();
-    Label coordinatesLabel;
-
+    private Label coordinatesLabel;
     private List<String> consoleMessages;
     private Label chatLog;
     private ScrollPane chatScroll;
@@ -55,15 +48,19 @@ public class GameScreen implements Screen {
 
     private boolean chatMode = false;
 
-//    int nextInputId = 0;
-//    Queue<InputCommand> pendingInputs = new ArrayDeque<>();
+
+    private PhysicsSimulation simulation;
+    private PlayerState localPlayer;
+
+    int nextInputId = 0;
+    Queue<InputCommand> pendingInputs = new ArrayDeque<>();
 
 
     public GameScreen(LanPvpGame game) {
         this.game = game;
         this.batch = game.batch;
-        this.gameState = game.gameState;
-        //player = players.get(game.clientId);
+        this.simulation = game.simulation;
+        this.localPlayer = game.localPlayer;
     }
 
     @Override
@@ -114,12 +111,27 @@ public class GameScreen implements Screen {
     @Override
     public void render(float delta) {
         input(delta);
+        simulation.step(delta);
+        syncBodies();
         game.client.poll(this::handleMessage);
         logic(delta);
         draw();
 
         stage.act(delta);
         stage.draw();
+    }
+
+    private void syncBodies() {
+        for (PlayerState p : simulation.players.values()) {
+            Vector2 pos = p.body.getPosition();
+            p.x = pos.x;
+            p.y = pos.y;
+        }
+        for (ProjectileState p : simulation.projectiles.values()) {
+            Vector2 pos = p.body.getPosition();
+            p.x = pos.x;
+            p.y = pos.y;
+        }
     }
 
     private void enterChatMode() {
@@ -163,15 +175,15 @@ public class GameScreen implements Screen {
         if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
         if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
 
-//        InputCommand cmd = new InputCommand();
-//        cmd.id = nextInputId++;
-//        cmd.dx = dx;
-//        cmd.dy = dy;
-//        cmd.dt = delta;
-//
-//        pendingInputs.add(cmd);
+        InputCommand cmd = new InputCommand();
+        cmd.id = nextInputId++;
+        cmd.dx = dx;
+        cmd.dy = dy;
+        cmd.dt = delta;
 
-        //applyMovement(localPlayerBody, cmd);
+        pendingInputs.add(cmd);
+
+        applyMovement(cmd);
 
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             Vector3 mouse = new Vector3(
@@ -188,8 +200,8 @@ public class GameScreen implements Screen {
 //            float mouseDx = mouse.x - me.x;
 //            float mouseDy = mouse.y - me.y;
 
-            float mouseDx = mouse.x - gameState.localPlayer.x;
-            float mouseDy = mouse.y - gameState.localPlayer.y;
+            float mouseDx = mouse.x - Constants.metersToPx(localPlayer.x);
+            float mouseDy = mouse.y - Constants.metersToPx(localPlayer.y);
 
             float len = (float)Math.sqrt(mouseDx * mouseDx + mouseDy * mouseDy);
             if (len == 0) return;
@@ -197,26 +209,72 @@ public class GameScreen implements Screen {
             mouseDx /= len;
             mouseDy /= len;
 
-            game.client.send("SHOOT " + mouseDx + " " + mouseDy);
+            applyFire(mouseDx, mouseDy);
+            //game.client.send("SHOOT " + mouseDx + " " + mouseDy);
         }
 
         if (!chatMode && (dx != 0 || dy != 0)) {
-            game.client.send("MOVE " + dx + " " + dy);
-        } else {
-            game.client.send("STOP");
+            //game.client.send("MOVE " + cmd.id + " " + cmd.dx + " " + cmd.dy + " " + delta);
         }
+//        else {
+//            game.client.send("STOP");
+//        }
+    }
+
+    private int nextProjectileId = 1;
+    private void applyFire(float dx, float dy) {
+        ProjectileState proj = new ProjectileState();
+        proj.id = nextProjectileId++;
+        //proj.ownerId = c.id;
+        Vector2 dir = new Vector2(dx, dy).nor();
+
+        Vector2 spawnPos = localPlayer.body.getPosition()
+            .cpy()
+            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+
+        proj.body = LoadUtillities.createProjectile(
+            simulation.world,
+            spawnPos.x,
+            spawnPos.y,
+            proj.id
+        );
+
+        proj.body.setLinearVelocity(
+            dir.scl(BULLET_SPEED_MPS)
+        );
+
+        simulation.projectiles.put(proj.id, proj);
+    }
+
+    private void applyMovement(InputCommand cmd) {
+        Vector2 desiredVelocity = new Vector2(cmd.dx, cmd.dy)
+            .nor()
+            .scl(PLAYER_SPEED_MPS);
+        localPlayer.body.setLinearVelocity(desiredVelocity);
     }
 
     private void moveCameraToPlayer() {
-        //PlayerState me = players.get(game.clientId);s
-        if (gameState.localPlayer != null) {
-            camera.position.set(gameState.localPlayer.x, gameState.localPlayer.y, 0);
+        if (localPlayer != null) {
+            float x = Constants.metersToPx(localPlayer.x);
+            float y = Constants.metersToPx(localPlayer.y);
+            camera.position.set(x, y, 0);
             camera.update();
         }
     }
 
     private void logic(float delta) {
         moveCameraToPlayer();
+        updateCoordinateLabel();
+    }
+
+    private void updateCoordinateLabel() {
+        //System.out.println("game.clientId: " + game.clientId + ", received player id: " + id);
+//        if (id == localPlayer.id) {
+//            //System.out.println("My position: " + x + " " + y);
+//        }
+        //System.out.println(localPlayer.x);
+        //coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", Constants.pxToMeters(localPlayer.x), Constants.pxToMeters(localPlayer.y)));
+        coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", localPlayer.x, localPlayer.y));
     }
 
     float xPx, yPx, sizePx, half;
@@ -239,25 +297,8 @@ public class GameScreen implements Screen {
         shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(Color.BROWN);
-        for (Wall w : game.walls) {
-
-//            xPx = Constants.metersToPx(w.x);
-//            yPx = Constants.metersToPx(w.y);
-//
-//            sizePx = Constants.metersToPx(1f); // 1 meter → pixels
-//            half = sizePx / 2f;
-//
-//            shapeRenderer.rect(
-//                xPx - half,   // bottom-left X
-//                yPx - half,   // bottom-left Y
-//                sizePx,       // width
-//                sizePx        // height
-//            );
-
-            //System.out.println("Drawing wall at " + w.x + " " + w.y + " size " + w.width + " " + w.height);
+        for (Wall w : simulation.walls) {
             shapeRenderer.setColor(Color.BROWN);
-            //shapeRenderer.rect(w.x, w.y, w.width, w.height);
-
             shapeRenderer.rect(
                 w.x - w.width / 2f,
                 w.y - w.height / 2f,
@@ -265,16 +306,29 @@ public class GameScreen implements Screen {
                 w.height
             );
         }
-        for (PlayerState p : gameState.players.values()) {
+        for (PlayerState p : simulation.players.values()) {
+//            if (p == localPlayer) {
+//                System.out.println("[Player position]: " + p.x + "," + p.y);
+//            }
             shapeRenderer.setColor(p.color);
-            shapeRenderer.circle(p.x, p.y, PLAYER_RADIUS_PX);
+            float px = Constants.metersToPx(p.x);
+            float py = Constants.metersToPx(p.y);
+
+            shapeRenderer.circle(px, py, PLAYER_RADIUS_PX);
+            //shapeRenderer.circle(p.x, p.y, PLAYER_RADIUS_PX);
         }
         shapeRenderer.setColor(Color.YELLOW);
-        for (ProjectileState p : gameState.projectiles.values()) {
-            shapeRenderer.circle(p.x, p.y, BULLET_RADIUS_PX);
+        for (ProjectileState p : simulation.projectiles.values()) {
+            float px = Constants.metersToPx(p.x);
+            float py = Constants.metersToPx(p.y);
+            shapeRenderer.circle(px, py, BULLET_RADIUS_PX);
         }
         shapeRenderer.end();
 
+        drawGrid();
+    }
+
+    private void drawGrid() {
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
         shapeRenderer.setColor(Color.BLUE);
         for (int i = -20; i <= 20; i++) {
@@ -312,6 +366,7 @@ public class GameScreen implements Screen {
     }
 
     private void handleMessage(String msg) {
+        System.out.println(msg.split(" ")[0]);
         if (msg.startsWith("STATE")) {
             updateGameState(msg);
         }
@@ -357,11 +412,11 @@ public class GameScreen implements Screen {
             float r = Float.parseFloat(data[3]);
             float g = Float.parseFloat(data[4]);
             float b = Float.parseFloat(data[5]);
-            PlayerState p = gameState.players.get(id);
+            PlayerState p = simulation.players.get(id);
             if (p == null) {
                 p = new PlayerState();
                 p.id = id;
-                gameState.players.put(id, p);
+                simulation.players.put(id, p);
             }
             p.x = x;
             p.y = y;
@@ -369,15 +424,9 @@ public class GameScreen implements Screen {
             p.color.g = g;
             p.color.b = b;
             i++;
-
-            //System.out.println("game.clientId: " + game.clientId + ", received player id: " + id);
-            if (id == gameState.localPlayerId) {
-                //System.out.println("My position: " + x + " " + y);
-                coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", Constants.pxToMeters(x), Constants.pxToMeters(y)));
-            }
         }
 
-        gameState.projectiles.clear();
+        simulation.projectiles.clear();
 
         if (i < tokens.length && tokens[i].equals("PR")) {
             i++;
@@ -392,7 +441,7 @@ public class GameScreen implements Screen {
                 p.x = x;
                 p.y = y;
 
-                gameState.projectiles.put(id, p);
+                simulation.projectiles.put(id, p);
                 i++;
             }
         }
