@@ -9,6 +9,7 @@ import com.springer.knakobrak.world.client.Wall;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 public class PhysicsSimulation {
@@ -18,23 +19,48 @@ public class PhysicsSimulation {
     public Map<Integer, PlayerState> players;
     public Map<Integer, ProjectileState> projectiles;
 
-    public Array<Wall> walls;
+    public ArrayList<Wall> walls;
 
     public ArrayList<Vector2> playerSpawnPoints;
 
     public PhysicsSimulation() {
         players = new HashMap<>();
         projectiles = new HashMap<>();
-        walls = new Array<>();
+        walls = new ArrayList<>();
         playerSpawnPoints = new ArrayList<>();
     }
 
     public void step(float delta, int a, int b) {
         world.step(delta, a, b);
+        age(delta);
     }
 
     public void step(float delta) {
         world.step(delta, 6, 2);
+        age(delta);
+    }
+
+    private void age(float delta) {
+        Iterator<ProjectileState> it = projectiles.values().iterator();
+        while (it.hasNext()) {
+            ProjectileState ps = it.next();
+            Body body = ps.body;
+            if (body == null) continue;
+
+            ps.lifeTime += delta;
+
+//            Vector2 pos = body.getPosition();
+//            ps.x = pos.x;
+//            ps.y = pos.y;
+
+//            Vector2 desiredVelocity = new Vector2(ps.vx, ps.vy).scl(BULLET_SPEED);
+//            body.setLinearVelocity(desiredVelocity);
+
+            if (ps.lifeTime >= ps.lifeTimeLimit || Math.abs(ps.x) > 500 || Math.abs(ps.y) > 500) {
+                world.destroyBody(body);
+                it.remove();
+            }
+        }
     }
 
     public PlayerState getPlayer(int id) {
@@ -111,7 +137,7 @@ public class PhysicsSimulation {
             if (player.id == playerId) {
                 player.hp--;
                 //broadcast("DAMAGE " + playerId + " _now_has " + player.hp + " HP.");
-                //System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
+                System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
             }
         });
     }

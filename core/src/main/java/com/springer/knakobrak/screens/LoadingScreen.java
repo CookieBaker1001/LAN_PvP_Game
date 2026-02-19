@@ -103,24 +103,23 @@ public class LoadingScreen implements Screen {
     }
 
     private void receiveWalls(String msg) {
-        System.out.println(msg);
+        //System.out.println("Walls: " + msg);
         String[] parts = msg.split(" ");
-        //System.out.println("Received walls: " + msg);
         game.simulation.clearWalls();
         //gameState.walls.clear();
         for (int i = 1; i < parts.length; i += 4) {
-            float x = Constants.metersToPx(Float.parseFloat(parts[i]));
-            float y = Constants.metersToPx(Float.parseFloat(parts[i + 1]));
-            float width = Constants.metersToPx(Float.parseFloat(parts[i + 2]));
-            float height = Constants.metersToPx(Float.parseFloat(parts[i + 3]));
+            float x = Float.parseFloat(parts[i]);
+            float y = Float.parseFloat(parts[i + 1]);
+            float width = Float.parseFloat(parts[i + 2]);
+            float height = Float.parseFloat(parts[i + 3]);
             Wall wall = new Wall();
             wall.x = x;
             wall.y = y;
             wall.width = width;
             wall.height = height;
+            wall.body = LoadUtillities.createWall(game.simulation.world, x, y, (int)height, (int)width);
             game.simulation.addWall(wall);
-            //gameState.walls.add(wall);
-            System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
+            //System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
         }
     }
 

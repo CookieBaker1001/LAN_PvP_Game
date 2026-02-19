@@ -253,13 +253,20 @@ public class GameServer implements Runnable {
                 }
                 System.out.println();
             }
-            LoadUtillities.generateWallsFromGrid(simulation.world, grid);
+            simulation.walls = LoadUtillities.generateWallsFromGrid(simulation.world, grid);
+            printWalls(simulation.walls);
             simulation.playerSpawnPoints = LoadUtillities.getPlayerSpawnPoints(grid);
         } catch (IOException e) {
             System.out.println("Error loading level: " + e.getMessage());
             e.printStackTrace();
             serverState = ServerState.LOBBY;
             //return;
+        }
+    }
+
+    private void printWalls(ArrayList<Wall> walls) {
+        for (Wall w : walls) {
+            System.out.println(w);
         }
     }
 

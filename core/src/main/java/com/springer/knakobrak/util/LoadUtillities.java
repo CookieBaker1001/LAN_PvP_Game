@@ -7,6 +7,7 @@ import com.springer.knakobrak.world.client.Wall;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -165,17 +166,18 @@ public class LoadUtillities {
         return rows.toArray(new int[0][]);
     }
 
-    public static void generateWallsFromGrid(World world, int[][] grid) {
+    public static ArrayList<Wall> generateWallsFromGrid(World world, int[][] grid) {
         int rows = grid.length;
         int cols = grid[0].length;
 
         boolean[][] used = new boolean[rows][cols];
+        ArrayList<Wall> walls = new ArrayList<>();
 
         for (int y = 0; y < rows; y++) {
             for (int x = 0; x < cols; x++) {
 
-                if (grid[y][x] == 0 || used[y][x]) continue;
-//                if (grid[y][x] == 2) {
+                if (grid[y][x] != 1 || used[y][x]) continue;
+//                if (grid[y][x] == 2) {a
 //                    simulation.addPlayerSpawnPoint(new Vector2(x, y));
 //                    continue;
 //                }
@@ -209,9 +211,10 @@ public class LoadUtillities {
                     }
                 }
 
-                LoadUtillities.createMergedWall(world, x, y, width, height);
+                walls.add(LoadUtillities.createMergedWall(world, x, y, width, height));
             }
         }
+        return walls;
     }
 
     public static ArrayList<Vector2> getPlayerSpawnPoints(int[][] grid) {

@@ -170,10 +170,12 @@ public class GameScreen implements Screen {
 
         float dx = 0, dy = 0;
 
-        if (Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1;
-        if (Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1;
-        if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
-        if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
+        if (!chatMode) {
+            if (Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
+        }
 
         InputCommand cmd = new InputCommand();
         cmd.id = nextInputId++;
@@ -298,12 +300,15 @@ public class GameScreen implements Screen {
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(Color.BROWN);
         for (Wall w : simulation.walls) {
-            shapeRenderer.setColor(Color.BROWN);
+            float wx = Constants.metersToPx(w.x);
+            float wy = Constants.metersToPx(w.y);
+            float ww = Constants.metersToPx(w.width);
+            float wh = Constants.metersToPx(w.height);
             shapeRenderer.rect(
-                w.x - w.width / 2f,
-                w.y - w.height / 2f,
-                w.width,
-                w.height
+                wx - ww / 2f,
+                wy - wh / 2f,
+                ww,
+                wh
             );
         }
         for (PlayerState p : simulation.players.values()) {
@@ -379,8 +384,8 @@ public class GameScreen implements Screen {
             System.out.println("Player " + parts[1] + " took damage! HP left: " + parts[3]);
         }
         else if (msg.startsWith("MSG")) {
-            String[] parts = msg.split(" ");
-            addChatMessage(parts[1]);
+            String trimmedMsg = msg.substring(4, msg.length()-1);
+            addChatMessage(trimmedMsg);
         }
     }
 
