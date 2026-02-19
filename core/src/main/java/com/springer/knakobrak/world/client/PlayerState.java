@@ -3,7 +3,9 @@ package com.springer.knakobrak.world.client;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.physics.box2d.Body;
 
-public class PlayerState {
+import java.io.Serializable;
+
+public class PlayerState implements Serializable {
     public int id;
     public Body body;
     public int hp = 3;

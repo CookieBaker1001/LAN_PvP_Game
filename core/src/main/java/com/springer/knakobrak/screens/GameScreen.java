@@ -11,14 +11,18 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.physics.box2d.Body;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.net.messages.ChatMessage;
+import com.springer.knakobrak.net.messages.NetMessage;
+import com.springer.knakobrak.net.messages.PlayerInputMessage;
+import com.springer.knakobrak.net.messages.WorldSnapshotMessage;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.PhysicsSimulation;
-import com.springer.knakobrak.net.messages.InputCommand;
 import com.springer.knakobrak.util.Constants;
 import com.springer.knakobrak.world.client.PlayerState;
 import com.springer.knakobrak.world.client.ProjectileState;
@@ -48,12 +52,11 @@ public class GameScreen implements Screen {
 
     private boolean chatMode = false;
 
-
     private PhysicsSimulation simulation;
     private PlayerState localPlayer;
 
     int nextInputId = 0;
-    Queue<InputCommand> pendingInputs = new ArrayDeque<>();
+    Queue<PlayerInputMessage> pendingInputs = new ArrayDeque<>();
 
 
     public GameScreen(LanPvpGame game) {
@@ -144,7 +147,12 @@ public class GameScreen implements Screen {
 
         if (!msg.isEmpty()) {
             // Send to server
-            game.client.send("MSG <" + game.username + ">" + msg);
+            ChatMessage chatMessage = new ChatMessage();
+            chatMessage.setMessage("<" + game.username + ">" + msg);
+            //game.client.send(chatMessage);
+
+
+            //game.client.send("MSG <" + game.username + ">" + msg);
             //sendMessageToServer(msg);
 
             // Optional: show locally
@@ -177,15 +185,18 @@ public class GameScreen implements Screen {
             if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
         }
 
-        InputCommand cmd = new InputCommand();
-        cmd.id = nextInputId++;
-        cmd.dx = dx;
-        cmd.dy = dy;
-        cmd.dt = delta;
+        PlayerInputMessage input = new PlayerInputMessage();
+        input.sequence = nextInputId++;
+        input.dx = dx;
+        input.dy = dy;
+        //input.dt = delta;
 
-        pendingInputs.add(cmd);
+        pendingInputs.add(input);
 
-        applyMovement(cmd);
+        applyMovement(input);
+
+        //game.client.send("MOVE " + input.sequence + " " + input.dx + " " + input.dy);
+        //game.client.send("MOVE " + cmd.id + " " + cmd.dx + " " + cmd.dy + " " + delta);
 
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             Vector3 mouse = new Vector3(
@@ -195,12 +206,6 @@ public class GameScreen implements Screen {
             );
 
             camera.unproject(mouse);
-
-//            PlayerState me = players.get(game.clientId);
-//            if (me == null) return;
-
-//            float mouseDx = mouse.x - me.x;
-//            float mouseDy = mouse.y - me.y;
 
             float mouseDx = mouse.x - Constants.metersToPx(localPlayer.x);
             float mouseDy = mouse.y - Constants.metersToPx(localPlayer.y);
@@ -248,8 +253,8 @@ public class GameScreen implements Screen {
         simulation.projectiles.put(proj.id, proj);
     }
 
-    private void applyMovement(InputCommand cmd) {
-        Vector2 desiredVelocity = new Vector2(cmd.dx, cmd.dy)
+    private void applyMovement(PlayerInputMessage input) {
+        Vector2 desiredVelocity = new Vector2(input.dx, input.dy)
             .nor()
             .scl(PLAYER_SPEED_MPS);
         localPlayer.body.setLinearVelocity(desiredVelocity);
@@ -370,24 +375,33 @@ public class GameScreen implements Screen {
         background.dispose();
     }
 
-    private void handleMessage(String msg) {
-        System.out.println(msg.split(" ")[0]);
-        if (msg.startsWith("STATE")) {
-            updateGameState(msg);
-        }
-        else if (msg.startsWith("SHOOT")) {
-            String[] parts = msg.split(" ");
-            System.out.println("Player " + parts[1] + " fired a shot at angle " + parts[2] + "!");
-        }
-        else if (msg.startsWith("DAMAGE")) {
-            String[] parts = msg.split(" ");
-            System.out.println("Player " + parts[1] + " took damage! HP left: " + parts[3]);
-        }
-        else if (msg.startsWith("MSG")) {
-            String trimmedMsg = msg.substring(4, msg.length()-1);
-            addChatMessage(trimmedMsg);
-        }
+//    private void handleMessage(String msg) {
+//        System.out.println(msg.split(" ")[0]);
+//        if (msg.startsWith("STATE")) {
+//            updateGameState(msg);
+//        }
+//        else if (msg.startsWith("SHOOT")) {
+//            String[] parts = msg.split(" ");
+//            System.out.println("Player " + parts[1] + " fired a shot at angle " + parts[2] + "!");
+//        }
+//        else if (msg.startsWith("DAMAGE")) {
+//            String[] parts = msg.split(" ");
+//            System.out.println("Player " + parts[1] + " took damage! HP left: " + parts[3]);
+//        }
+//        else if (msg.startsWith("MSG")) {
+//            String trimmedMsg = msg.substring(4, msg.length()-1);
+//            addChatMessage(trimmedMsg);
+//        }
+//    }
+
+    private void handleMessage(NetMessage msg) {
+//        if (msg instanceof WorldSnapshotMessage ps) {
+//            handlePlayerSnapshot(ps);
+//        } else if (msg instanceof WorldSnapshot ws) {
+//            handleWorldSnapshot(ws);
+//        }
     }
+
 
     public void addChatMessage(String message) {
         chatLog.setText(chatLog.getText() + "\n" + message);
@@ -397,6 +411,25 @@ public class GameScreen implements Screen {
             chatScroll.layout();
             chatScroll.setScrollPercentY(1f);
         });
+    }
+
+    private void onServerSnapshot(WorldSnapshotMessage snap) {
+        if (snap.id != localPlayer.id) return;
+
+        // 1️⃣ Correct position
+        Body body = localPlayer.body;
+        body.setTransform(snap.position, body.getAngle());
+        body.setLinearVelocity(snap.velocity);
+
+        // 2️⃣ Drop acknowledged inputs
+        pendingInputs.removeIf(
+            input -> input.sequence <= snap.lastProcessedInput
+        );
+
+        // 3️⃣ Re-apply remaining inputs
+        for (PlayerInputMessage input : pendingInputs) {
+            //applyInputToBody(body, input);
+        }
     }
 
     private void updateGameState(String msg) {
@@ -412,11 +445,15 @@ public class GameScreen implements Screen {
         while (i < tokens.length && !tokens[i].equals("PR")) {
             String[] data = tokens[i].split(":");
             int id = Integer.parseInt(data[0]);
+            if (id == localPlayer.id) {
+                //onServerSnapshot();
+                continue;
+            }
             float x = Constants.metersToPx(Float.parseFloat(data[1]));
             float y = Constants.metersToPx(Float.parseFloat(data[2]));
-            float r = Float.parseFloat(data[3]);
-            float g = Float.parseFloat(data[4]);
-            float b = Float.parseFloat(data[5]);
+//            float r = Float.parseFloat(data[3]);
+//            float g = Float.parseFloat(data[4]);
+//            float b = Float.parseFloat(data[5]);
             PlayerState p = simulation.players.get(id);
             if (p == null) {
                 p = new PlayerState();
@@ -425,9 +462,9 @@ public class GameScreen implements Screen {
             }
             p.x = x;
             p.y = y;
-            p.color.r = r;
-            p.color.g = g;
-            p.color.b = b;
+//            p.color.r = r;
+//            p.color.g = g;
+//            p.color.b = b;
             i++;
         }
 

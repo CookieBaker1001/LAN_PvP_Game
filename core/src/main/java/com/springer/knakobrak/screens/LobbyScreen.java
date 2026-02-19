@@ -11,7 +11,13 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.net.messages.JoinAcceptMessage;
+import com.springer.knakobrak.net.messages.LobbyStateMessage;
+import com.springer.knakobrak.net.messages.NetMessage;
+import com.springer.knakobrak.net.messages.StartGameMessage;
 import com.springer.knakobrak.world.PhysicsSimulation;
+
+import java.io.IOException;
 
 public class LobbyScreen implements Screen {
 
@@ -92,8 +98,7 @@ public class LobbyScreen implements Screen {
             playButton.addListener(new ChangeListener() {
                 @Override
                 public void changed(ChangeEvent event, Actor actor) {
-                    System.out.println("Host starting game...");
-                    game.client.send("START_GAME");
+                    startGame();
                 }
             });
         }
@@ -122,6 +127,19 @@ public class LobbyScreen implements Screen {
         stage.act(delta);
         stage.draw();
     }
+
+    private boolean startGame() {
+        try {
+            System.out.println("Host starting game...");
+            StartGameMessage msg = new StartGameMessage();
+            game.client.send(msg);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
     @Override public void resize(int width, int height) {
         game.viewport.update(width, height);
     }
@@ -143,34 +161,41 @@ public class LobbyScreen implements Screen {
         stage.dispose();
     }
 
-    private void handleMessage(String msg) {
-        if (msg.startsWith("ASSIGNED_ID")) {
-            String[] data = msg.split(" ");
-            game.playerId = Integer.parseInt(data[1]);
-            //game.gameState.localPlayerId = Integer.parseInt(data[1]);
-            //game.playerColor = new Color(Float.parseFloat(data[2]), Float.parseFloat(data[3]), Float.parseFloat(data[4]), 1);
-            //System.out.println("Assigned ID: " + game.gameState.localPlayerId);
+    private void handleMessage(NetMessage msg) {
+        if (msg instanceof JoinAcceptMessage) {
+            game.playerId = ((JoinAcceptMessage) msg).clientId;
             System.out.println("Assigned ID: " + game.playerId);
-        } else if (msg.startsWith("PLAYER_LIST")) {
-            updatePlayerList(msg);
+        } else if (msg instanceof LobbyStateMessage) {
+            LobbyStateMessage lobbyMsg = (LobbyStateMessage)msg;
+            updatePlayerList(lobbyMsg);
         }
-//        else if (msg.startsWith("WALLS")) {
-//            receiveWalls(msg);
+//        if (msg.startsWith("ASSIGNED_ID")) {
+//            String[] data = msg.split(" ");
+//            game.playerId = Integer.parseInt(data[1]);
+//            //game.gameState.localPlayerId = Integer.parseInt(data[1]);
+//            //game.playerColor = new Color(Float.parseFloat(data[2]), Float.parseFloat(data[3]), Float.parseFloat(data[4]), 1);
+//            //System.out.println("Assigned ID: " + game.gameState.localPlayerId);
+//            System.out.println("Assigned ID: " + game.playerId);
+//        } else if (msg.startsWith("PLAYER_LIST")) {
+//            updatePlayerList(msg);
 //        }
-//        else if (msg.equals("GAME_START")) {
+////        else if (msg.startsWith("WALLS")) {
+////            receiveWalls(msg);
+////        }
+////        else if (msg.equals("GAME_START")) {
+////            game.setScreen(new GameScreen(game));
+////        }
+//        else if (msg.equals("ENTER_LOADING")) {
+//            simulation.initPhysics();
+//            game.setScreen(new LoadingScreen(game));
+//        }
+//        else if (msg.startsWith("GAME_START")) {
+//            //receiveWalls(msg);
 //            game.setScreen(new GameScreen(game));
+//        } else if (msg.equals("HOST_LEFT")) {
+//            game.cleanupNetworking();
+//            game.setScreen(new MainMenuScreen(game));
 //        }
-        else if (msg.equals("ENTER_LOADING")) {
-            simulation.initPhysics();
-            game.setScreen(new LoadingScreen(game));
-        }
-        else if (msg.startsWith("GAME_START")) {
-            //receiveWalls(msg);
-            game.setScreen(new GameScreen(game));
-        } else if (msg.equals("HOST_LEFT")) {
-            game.cleanupNetworking();
-            game.setScreen(new MainMenuScreen(game));
-        }
     }
 
 //    private void receiveWalls(String msg) {
@@ -191,6 +216,10 @@ public class LobbyScreen implements Screen {
 //            System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
 //        }
 //    }
+
+    private void updatePlayerList(LobbyStateMessage msg) {
+        System.out.println("Updating lobby list!");
+    }
 
     private void updatePlayerList(String msg) {
         // Update player list UI

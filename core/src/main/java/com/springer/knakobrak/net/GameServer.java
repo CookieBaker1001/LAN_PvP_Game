@@ -91,6 +91,8 @@ public class GameServer implements Runnable {
         private final Queue<String> messageQueue = new ConcurrentLinkedQueue<>();
         public PlayerState playerState;
 
+        public int lastProcessedInput = 0;
+
         ClientHandler(Socket socket) throws IOException {
             this.socket = socket;
             in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
@@ -128,7 +130,6 @@ public class GameServer implements Runnable {
                 this.isHost = true;
             }
             PlayerState p = new PlayerState();
-            //host.isHost = true;
             p.id = id;
             p.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
 
@@ -180,13 +181,12 @@ public class GameServer implements Runnable {
             if (serverState == ServerState.GAME) {
                 //System.out.println("Tick (" + (counter++) + ")");
                 processGameInputs();
-                updateProjectiles(delta);
+                //updateProjectiles(delta);
 
                 simulation.step(dt, 6, 2);
 
                 syncBodiesToGameState();
-                //broadcastGameState();
-
+                broadcastGameState();
 
             } else if (serverState == ServerState.LOBBY) {
                 try {
@@ -341,8 +341,6 @@ public class GameServer implements Runnable {
 //        }
     }
 
-    int lastProcessedInputId;
-
     private void processGameInputs() {
         for (ClientHandler c : clients.values()) {
             String line;
@@ -350,8 +348,9 @@ public class GameServer implements Runnable {
                 //System.out.println("Processing input from player " + c.id + ": " + line);
                 if (line.startsWith("MOVE")) {
                     String[] p = line.split(" ");
-                    float dx = Float.parseFloat(p[1]);
-                    float dy = Float.parseFloat(p[2]);
+                    int sequence = Integer.parseInt(p[1]);
+                    float dx = Float.parseFloat(p[2]);
+                    float dy = Float.parseFloat(p[3]);
 
                     Body body = c.playerState.body;
                     if (body == null) continue;
@@ -360,6 +359,8 @@ public class GameServer implements Runnable {
                         .nor()
                         .scl(PLAYER_SPEED_MPS);
                     body.setLinearVelocity(desiredVelocity);
+
+                    c.lastProcessedInput = sequence;
                 }
                 else if (line.equals("STOP")) {
                     Body body = c.playerState.body;
@@ -455,10 +456,11 @@ public class GameServer implements Runnable {
             sb.append(" ")
                 .append(c.id).append(":")
                 .append(c.playerState.x).append(":")
-                .append(c.playerState.y).append(":")
-                .append(c.playerState.color.r).append(":")
-                .append(c.playerState.color.g).append(":")
-                .append(c.playerState.color.b);
+                .append(c.playerState.y);
+//                .append(":")
+//                .append(c.playerState.color.r).append(":")
+//                .append(c.playerState.color.g).append(":")
+//                .append(c.playerState.color.b);
         }
         sb.append(" PR");
         for (ProjectileState p : simulation.projectiles.values()) {

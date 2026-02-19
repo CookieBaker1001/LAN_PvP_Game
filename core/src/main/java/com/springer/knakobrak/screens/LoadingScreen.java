@@ -50,7 +50,7 @@ public class LoadingScreen implements Screen {
         game.batch.draw(background, 0, 0, worldWidth, worldHeight);
         game.batch.end();
 
-        game.client.poll(this::handleMessage);
+        //game.client.poll(this::handleMessage);
 //        stage.act(delta);
 //        stage.draw();
 
@@ -64,24 +64,24 @@ public class LoadingScreen implements Screen {
     }
 
     private void handleMessage(String msg) {
-        if (msg.startsWith("INIT_PLAYER")) {
-            //System.out.println("INIT_PLAYER");
-            receivePlayerData(msg);
-        } else if (msg.startsWith("INIT_MAP ")) {
-            //System.out.println("INIT_MAP");
-            String[] parts = msg.split(" ");
-            //System.out.println("Dimensions: " + parts[1] + "x" + parts[2]);
-        } else if (msg.startsWith("INIT_MAP_WALLS")) {
-            //System.out.println("INIT_MAP_WALLS");
-            receiveWalls(msg);
-        } else if (msg.equals("INIT_DONE")) {
-            //System.out.println("INIT_DONE");
-            initDone = true;
-            game.client.send("READY");
-        } else if (msg.equals("START_GAME")) {
-            //System.out.println("START_GAME");
-            gameStart = true;
-        }
+//        if (msg.startsWith("INIT_PLAYER")) {
+//            //System.out.println("INIT_PLAYER");
+//            receivePlayerData(msg);
+//        } else if (msg.startsWith("INIT_MAP ")) {
+//            //System.out.println("INIT_MAP");
+//            String[] parts = msg.split(" ");
+//            //System.out.println("Dimensions: " + parts[1] + "x" + parts[2]);
+//        } else if (msg.startsWith("INIT_MAP_WALLS")) {
+//            //System.out.println("INIT_MAP_WALLS");
+//            receiveWalls(msg);
+//        } else if (msg.equals("INIT_DONE")) {
+//            //System.out.println("INIT_DONE");
+//            initDone = true;
+//            game.client.send("READY");
+//        } else if (msg.equals("START_GAME")) {
+//            //System.out.println("START_GAME");
+//            gameStart = true;
+//        }
     }
 
     private void receivePlayerData(String msg) {
