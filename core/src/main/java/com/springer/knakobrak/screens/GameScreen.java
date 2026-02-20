@@ -148,8 +148,8 @@ public class GameScreen implements Screen {
         if (!msg.isEmpty()) {
             // Send to server
             ChatMessage chatMessage = new ChatMessage();
-            chatMessage.setMessage("<" + game.username + ">" + msg);
-            //game.client.send(chatMessage);
+            chatMessage.message = "<" + game.username + ">" + msg;
+            game.client.send(chatMessage);
 
 
             //game.client.send("MSG <" + game.username + ">" + msg);

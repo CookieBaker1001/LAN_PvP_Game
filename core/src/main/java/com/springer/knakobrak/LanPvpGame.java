@@ -7,6 +7,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
+import com.springer.knakobrak.net.messages.DisconnectMessage;
 import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.screens.MainMenuScreen;
 import com.springer.knakobrak.world.client.PlayerState;
@@ -79,7 +80,9 @@ public class LanPvpGame extends Game {
 
     public void cleanupNetworking() {
         if (client != null) {
-            client.send("QUIT");
+//            DisconnectMessage dcm = new DisconnectMessage();
+//            dcm.playerId = playerId;
+//            client.send(dcm);
             client.disconnect();
             client = null;
         }

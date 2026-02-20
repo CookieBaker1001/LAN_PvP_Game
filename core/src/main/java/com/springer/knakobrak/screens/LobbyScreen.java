@@ -75,7 +75,7 @@ public class LobbyScreen implements Screen {
         leaveButton.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
-                game.client.disconnect();
+                game.client.disconnect(game.playerId);
                 if (isHost) {
                     game.hostedServer.shutdown();
                     try {
@@ -153,6 +153,7 @@ public class LobbyScreen implements Screen {
     }
 
     private void handleMessage(NetMessage msg) {
+        System.out.println("Message received!");
         if (msg instanceof JoinAcceptMessage) {
             game.playerId = ((JoinAcceptMessage) msg).clientId;
             System.out.println("Assigned ID: " + game.playerId);
@@ -162,8 +163,8 @@ public class LobbyScreen implements Screen {
         } else if (msg instanceof EnterLoadingMessage) {
             simulation.initPhysics();
             game.setScreen(new LoadingScreen(game));
-        } else if (msg instanceof DisconnectMessage) {
-            System.out.println(((DisconnectMessage) msg).reason);
+        } else if (msg instanceof EndGameMessage) {
+            System.out.println(((EndGameMessage) msg).reason);
             game.cleanupNetworking();
             game.setScreen(new MainMenuScreen(game));
         }

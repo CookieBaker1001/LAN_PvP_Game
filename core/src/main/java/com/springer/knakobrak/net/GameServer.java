@@ -3,24 +3,22 @@ package com.springer.knakobrak.net;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import com.springer.knakobrak.net.messages.*;
-import com.springer.knakobrak.serialization.NetworkRegistry;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.world.client.PlayerState;
 import com.springer.knakobrak.world.client.ProjectileState;
 import com.springer.knakobrak.world.client.Wall;
 import com.badlogic.gdx.physics.box2d.*;
+import com.springer.knakobrak.world.server.ServerMessage;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.springer.knakobrak.util.Constants.*;
@@ -28,12 +26,36 @@ import static com.springer.knakobrak.util.Constants.*;
 public class GameServer implements Runnable {
 
     private ServerSocket serverSocket;
+    private Thread gameThread;
     private int port;
     private volatile boolean running = true;
+
+    private final BlockingQueue<ServerMessage> inbox = new LinkedBlockingQueue<>();
 
     private ClientHandler host;
     private static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(1);
+
+    public int getNextId() {
+        return nextId.getAndIncrement();
+    }
+
+    public boolean isRoomEmpty() {
+        return clients.isEmpty();
+    }
+
+    public void setHost(ClientHandler handler) {
+        host = handler;
+    }
+
+    public void addClient(int id, ClientHandler handler) {
+        clients.put(id, handler);
+        try {
+            simulation.players.put(id, handler.playerState);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     private PhysicsSimulation simulation;
     private int nextProjectileId = 1;
@@ -58,19 +80,160 @@ public class GameServer implements Runnable {
 
 
 
+    void handleLobbyMessage(ClientHandler sender, NetMessage msg) {
+        if (msg instanceof StartGameMessage && sender == host) {
+            transitionToLoading();
+        } else if (msg instanceof JoinMessage) {
+            JoinMessage jm = (JoinMessage) msg;
+            handleJoin(sender, jm);
+        } else if (msg instanceof DisconnectMessage) {
+            DisconnectMessage dcm = (DisconnectMessage) msg;
+            removeClient(sender, dcm);
+        }
+    }
+
+    private void transitionToLoading() {
+        broadcast(new EnterLoadingMessage());
+        serverState = ServerState.LOADING;
+        simulation.initPhysics();
+        loadData();
+        spawnPlayers();
+        //Thread.sleep(500);
+        sendInitialDataToAllClients();
+    }
+
+    private void handleJoin(ClientHandler sender, JoinMessage jm) {
+        System.out.println(jm.playerName + "(" + jm.protocolVersion + ") just joined!");
+
+        int id = nextId.getAndIncrement();
+
+        sender.id = id;
+        sender.isHost = clients.isEmpty();
+        if (clients.isEmpty()) {
+            host = sender;
+        }
+
+        PlayerState ps = new PlayerState();
+        ps.id = id;
+        ps.name = jm.playerName;
+        ps.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
+
+        simulation.players.put(id, ps);
+        clients.put(id, sender);
+
+        JoinAcceptMessage accept = new JoinAcceptMessage();
+        accept.clientId = id;
+        accept.isHost = sender.isHost;
+
+        sender.send(accept);
+
+        broadcastPlayerList();
+    }
+
+    private void removeClient(ClientHandler sender, DisconnectMessage dcm) {
+        System.out.println("Player " + dcm.playerId + " left. Reason: " + dcm.reason);
+        sender.disconnect();
+    }
+
+    // Runs from the gameloop
+    void processServerMessages() {
+        ServerMessage sm;
+        while ((sm = inbox.poll()) != null) {
+            dispatchMessage(sm.sender, sm.message);
+        }
+    }
+
+    private void dispatchMessage(ClientHandler sender, NetMessage msg) {
+        switch (serverState) {
+            case LOBBY: {handleLobbyMessage(sender, msg);}
+            case LOADING: {handleLoadingMessage(sender, msg);}
+                case GAME: {handleGameMessage(sender, msg);}
+            default: {}
+        }
+    }
+
+    void handleGameMessage(ClientHandler sender, NetMessage msg) {
+        if (msg instanceof PlayerInputMessage) {
+            PlayerInputMessage pim = (PlayerInputMessage) msg;
+            handlePlayerInput(sender, pim);
+        } else if (msg instanceof SpawnProjectileMessage) {
+            SpawnProjectileMessage spm = (SpawnProjectileMessage) msg;
+            handleSpawnProjectile(sender, spm);
+        }
+    }
+
+    void handlePlayerInput(ClientHandler sender, PlayerInputMessage pim) {
+        int sequence = pim.sequence;
+        float dx = pim.dx;
+        float dy = pim.dy;
+        Body body = sender.playerState.body;
+        if (body == null) return;
+        Vector2 desiredVelocity = new Vector2(dx, dy)
+            .nor()
+            .scl(PLAYER_SPEED_MPS);
+        body.setLinearVelocity(desiredVelocity);
+        sender.lastProcessedInput = sequence;
+    }
+
+    void handleSpawnProjectile(ClientHandler sender, SpawnProjectileMessage spm) {
+        float dx = spm.x;
+        float dy = spm.y;
+        ProjectileState proj = new ProjectileState();
+        proj.id = nextProjectileId++;
+        proj.ownerId = sender.id;
+        Vector2 dir = new Vector2(dx, dy).nor();
+        Vector2 spawnPos = sender.playerState.body.getPosition()
+            .cpy()
+            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+        proj.body = LoadUtillities.createProjectile(
+            simulation.world,
+            spawnPos.x,
+            spawnPos.y,
+            proj.id
+        );
+        proj.body.setLinearVelocity(
+            dir.scl(BULLET_SPEED_MPS)
+        );
+        simulation.projectiles.put(proj.id, proj);
+    }
+
+    void handleLoadingMessage(ClientHandler sender, NetMessage msg) {
+        if (msg instanceof ReadyMessage) {
+            ReadyMessage rm = (ReadyMessage) msg;
+            handleReadyMessage(sender, rm);
+        }
+    }
+
+    void handleReadyMessage(ClientHandler sender, ReadyMessage rm) {
+        if (!rm.ready) {
+            readyClients.remove(sender.id);
+            return;
+        }
+        readyClients.add(sender.id);
+        if (readyClients.size() == clients.size()) {
+            startGame();
+        }
+    }
+
     @Override
     public void run() {
         try {
             System.out.println("Game server started on port " + port);
-            new Thread(this::gameLoop).start();
+            gameThread = new Thread(this::gameLoop, "Game loop");
+            gameThread.start();
+
             while (running) {
                 Socket socket = serverSocket.accept();
-                ClientHandler client = new ClientHandler(socket);
-                new Thread(client).start();
-                if (host == null) {
-                    host = client;
-                    System.out.println("Host connected.");
-                } else System.out.println("New client connected");
+                ClientHandler client = new ClientHandler(this, socket);
+
+                Thread clientThread = new Thread(client);
+                clientThread.start();
+
+                System.out.println("New client connected!");
+//                if (host == null) {
+//                    host = client;
+//                    System.out.println("Host connected.");
+//                } else System.out.println("New client connected");
             }
         } catch (IOException e) {
             if (running) {
@@ -82,103 +245,36 @@ public class GameServer implements Runnable {
         }
     }
 
-    private class ClientHandler implements Runnable {
+    public void enqueue(ServerMessage sm) {
+        //inbox.offer(sm);
+        inbox.add(sm);
+    }
 
-        private int id;
-        private String name;
-
-        private Socket socket;
-        private Kryo kryo;
-        Input in;
-        Output out;
-
-        private boolean isHost;
-
-        private final Queue<NetMessage> incoming = new ConcurrentLinkedQueue<>();
-        public PlayerState playerState;
-
-        public int lastProcessedInput = 0;
-
-        ClientHandler(Socket socket) throws IOException {
-            this.socket = socket;
-            kryo = new Kryo();
-            NetworkRegistry.register(kryo);
-            in = new Input(socket.getInputStream());
-            out = new Output(socket.getOutputStream());
+    public synchronized void handleJoinRequest(ClientHandler client, JoinMessage msg) {
+        if (serverState != ServerState.LOBBY) {
+            JoinRejectedMessage jrm = new JoinRejectedMessage();
+            jrm.reason = "Game already started";
+            client.send(jrm);
+            client.disconnect();
+            return;
         }
-
-        @Override
-        public void run() {
-            try {
-                handshake();
-                readLoop();
-            } catch (IOException e) {
-                //System.out.println("Something went wrong!");
-                e.printStackTrace();
-            } finally {
-                //System.out.println("Finally...");
-                disconnect();
-            }
+//        if (nameTaken(msg.playerName)) {
+//            client.send(new JoinRejectedMessage("Name already in use"));
+//            client.disconnect();
+//            return;
+//        }
+        // Accept
+        client.name = msg.playerName;
+        clients.put(client.id, client);
+        if (host == null) {
+            host = client;
         }
-
-        private void readLoop() throws IOException {
-            NetMessage msg;
-            while (!socket.isClosed()) {
-                //msg = (NetMessage) kryo.readClassAndObject(in);
-                msg = kryo.readObject(in, NetMessage.class);
-                incoming.add(msg);
-            }
-        }
-
-        public synchronized void send(NetMessage msg) {
-            kryo.writeClassAndObject(out, msg);
-            out.flush();
-        }
-
-        private void handshake() throws IOException {
-            //name = in.readLine();
-            id = nextId.getAndIncrement();
-            if (clients.isEmpty()) {
-                host = this;
-                this.isHost = true;
-            }
-            PlayerState p = new PlayerState();
-            p.id = id;
-            p.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
-
-            this.playerState = p;
-
-            clients.put(id, this);
-            try {
-                simulation.players.put(id, p);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            //out.println("ASSIGNED_ID " + id);
-            broadcastPlayerList();
-            //broadcastWalls();
-        }
-
-        public void disconnect() {
-            System.out.println("Disconnecting!");
-            clients.remove(id);
-            simulation.removePlayer(id);
-            //simulation.players.remove(id);
-            if (this == host) {
-                DisconnectMessage dm = new DisconnectMessage();
-                dm.playerId = id;
-                dm.reason = "Not specified";
-                broadcast(dm);
-                serverState = ServerState.SHUTDOWN;
-                shutdown();
-            } else {
-                broadcastPlayerList();
-            }
-            try {
-                socket.close();
-                socket = null;
-            } catch (IOException ignored) {}
-        }
+        JoinAcceptMessage jam = new JoinAcceptMessage();
+        jam.clientId = client.id;
+        jam.isHost = (client == host);
+        client.send(jam);
+        broadcastPlayerList();
+        //broadcastLobbyUpdate();
     }
 
     private void gameLoop() {
@@ -194,9 +290,11 @@ public class GameServer implements Runnable {
             delta = (now - last) / 1_000_000_000f;
             last = now;
 
+            processServerMessages();
+
             if (serverState == ServerState.GAME) {
                 //System.out.println("Tick (" + (counter++) + ")");
-                processGameInputs();
+                //processGameInputs();
                 //updateProjectiles(delta);
 
                 simulation.step(dt, 6, 2);
@@ -204,16 +302,6 @@ public class GameServer implements Runnable {
                 syncBodiesToGameState();
                 broadcastGameState();
 
-            } else if (serverState == ServerState.LOBBY) {
-                try {
-                    processMessagesInLobby();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                    serverState = ServerState.SHUTDOWN;
-                }
-            } else if (serverState == ServerState.LOADING) {
-                //loadingScreen();
-                processMessagesInLoadingScreen();
             }
             try {
                 Thread.sleep(TICK_MS); // ~60 Hz
@@ -239,35 +327,28 @@ public class GameServer implements Runnable {
         }
     }
 
-    private void processMessagesInLobby() throws InterruptedException {
-        for (ClientHandler c : clients.values()) {
-            String line;
-            NetMessage msg;
-            while ((msg = c.incoming.poll()) != null) {
-                if (msg instanceof StartGameMessage) {
-                    broadcast(new EnterLoadingMessage());
-                    serverState = ServerState.LOADING;
-                    simulation.initPhysics();
-                    loadData();
-                    spawnPlayers();
-                    Thread.sleep(500);
-                    sendInitialDataToAllClients();
-                }
-            }
-//            while ((line = c.incoming.poll()) != null) {
-//                //if (line.equals("START_GAME") && c == host) {
-//                if (line.startsWith("START_GAME") && c == host) {
-//                    broadcast("ENTER_LOADING");
+//    private void processMessagesInLobby() throws InterruptedException {
+//        for (ClientHandler c : clients.values()) {
+//            NetMessage msg;
+//            while ((msg = c.incoming.poll()) != null) {
+//                if (msg instanceof StartGameMessage) {
+//                    broadcast(new EnterLoadingMessage());
 //                    serverState = ServerState.LOADING;
 //                    simulation.initPhysics();
 //                    loadData();
 //                    spawnPlayers();
 //                    Thread.sleep(500);
 //                    sendInitialDataToAllClients();
+//                } else if (msg instanceof JoinMessage) {
+//                    JoinMessage jm = (JoinMessage) msg;
+//                } else if (msg instanceof DisconnectMessage) {
+//                    DisconnectMessage dcm = (DisconnectMessage) msg;
+//                    System.out.println("Player " + dcm.playerId + " left. Reason: " + dcm.reason);
+//                    c.disconnect();
 //                }
 //            }
-        }
-    }
+//        }
+//    }
 
     private void loadData() {
 //        simulation.clearWalls();
@@ -299,34 +380,34 @@ public class GameServer implements Runnable {
     }
 
     Set<Integer> readyClients = new HashSet<>();
-    private void processMessagesInLoadingScreen() {
-        for (ClientHandler c : clients.values()) {
-//            String line;
-//            while ((line = c.incoming.poll()) != null) {
-//                //if (line.equals("START_GAME") && c == host) {
-//                if (line.equals("READY")) {
+//    private void processMessagesInLoadingScreen() {
+//        for (ClientHandler c : clients.values()) {
+////            String line;
+////            while ((line = c.incoming.poll()) != null) {
+////                //if (line.equals("START_GAME") && c == host) {
+////                if (line.equals("READY")) {
+////                    readyClients.add(c.id);
+////                    if (readyClients.size() == clients.size()) {
+////                        startGame();
+////                    }
+////                }
+////            }
+//
+//            NetMessage msg;
+//            while ((msg = c.incoming.poll()) != null) {
+//                if (msg instanceof ReadyMessage) {
+//                    if (!((ReadyMessage) msg).ready) {
+//                        readyClients.remove(c);
+//                        continue;
+//                    }
 //                    readyClients.add(c.id);
 //                    if (readyClients.size() == clients.size()) {
 //                        startGame();
 //                    }
 //                }
 //            }
-
-            NetMessage msg;
-            while ((msg = c.incoming.poll()) != null) {
-                if (msg instanceof ReadyMessage) {
-                    if (!((ReadyMessage) msg).ready) {
-                        readyClients.remove(c);
-                        continue;
-                    }
-                    readyClients.add(c.id);
-                    if (readyClients.size() == clients.size()) {
-                        startGame();
-                    }
-                }
-            }
-        }
-    }
+//        }
+//    }
 
     private void startGame() {
         serverState = ServerState.GAME;
@@ -378,16 +459,71 @@ public class GameServer implements Runnable {
         c.send(iwm);
     }
 
-    private void processGameInputs() {
-        for (ClientHandler c : clients.values()) {
-//            String line;
-//            while ((line = c.incoming.poll()) != null) {
-//                //System.out.println("Processing input from player " + c.id + ": " + line);
-//                if (line.startsWith("MOVE")) {
-//                    String[] p = line.split(" ");
-//                    int sequence = Integer.parseInt(p[1]);
-//                    float dx = Float.parseFloat(p[2]);
-//                    float dy = Float.parseFloat(p[3]);
+//    private void processGameInputs() {
+//        for (ClientHandler c : clients.values()) {
+////            String line;
+////            while ((line = c.incoming.poll()) != null) {
+////                //System.out.println("Processing input from player " + c.id + ": " + line);
+////                if (line.startsWith("MOVE")) {
+////                    String[] p = line.split(" ");
+////                    int sequence = Integer.parseInt(p[1]);
+////                    float dx = Float.parseFloat(p[2]);
+////                    float dy = Float.parseFloat(p[3]);
+////
+////                    Body body = c.playerState.body;
+////                    if (body == null) continue;
+////
+////                    Vector2 desiredVelocity = new Vector2(dx, dy)
+////                        .nor()
+////                        .scl(PLAYER_SPEED_MPS);
+////                    body.setLinearVelocity(desiredVelocity);
+////
+////                    c.lastProcessedInput = sequence;
+////                }
+////                else if (line.equals("STOP")) {
+////                    Body body = c.playerState.body;
+////                    if (body != null) {
+////                        body.setLinearVelocity(0, 0);
+////                    }
+////                }
+////                else if (line.startsWith("SHOOT")) {
+////                    String[] p = line.split(" ");
+////                    float dx = Float.parseFloat(p[1]);
+////                    float dy = Float.parseFloat(p[2]);
+////                    ProjectileState proj = new ProjectileState();
+////                    proj.id = nextProjectileId++;
+////                    //proj.ownerId = c.id;
+////                    Vector2 dir = new Vector2(dx, dy).nor();
+////
+////                    Vector2 spawnPos = c.playerState.body.getPosition()
+////                        .cpy()
+////                        .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+////
+////                    proj.body = LoadUtillities.createProjectile(
+////                        simulation.world,
+////                        spawnPos.x,
+////                        spawnPos.y,
+////                        proj.id
+////                    );
+////
+////                    proj.body.setLinearVelocity(
+////                        dir.scl(BULLET_SPEED_MPS)
+////                    );
+////
+////                    simulation.projectiles.put(proj.id, proj);
+////                }
+////                else if (line.startsWith("MSG")) {
+////                    broadcast(line);
+////                }
+////            }
+//
+//            NetMessage msg;
+//            while((msg = c.incoming.poll()) != null) {
+//                if (msg instanceof PlayerInputMessage) {
+//                    PlayerInputMessage pim = (PlayerInputMessage) msg;
+//                    int sequence = pim.sequence;
+//                    float dx = pim.dx;
+//                    float dy = pim.dy;
 //
 //                    Body body = c.playerState.body;
 //                    if (body == null) continue;
@@ -398,20 +534,13 @@ public class GameServer implements Runnable {
 //                    body.setLinearVelocity(desiredVelocity);
 //
 //                    c.lastProcessedInput = sequence;
-//                }
-//                else if (line.equals("STOP")) {
-//                    Body body = c.playerState.body;
-//                    if (body != null) {
-//                        body.setLinearVelocity(0, 0);
-//                    }
-//                }
-//                else if (line.startsWith("SHOOT")) {
-//                    String[] p = line.split(" ");
-//                    float dx = Float.parseFloat(p[1]);
-//                    float dy = Float.parseFloat(p[2]);
+//                } else if (msg instanceof SpawnProjectileMessage) {
+//                    SpawnProjectileMessage spm = (SpawnProjectileMessage) msg;
+//                    float dx = spm.x;
+//                    float dy = spm.y;
 //                    ProjectileState proj = new ProjectileState();
 //                    proj.id = nextProjectileId++;
-//                    //proj.ownerId = c.id;
+//                    proj.ownerId = c.id;
 //                    Vector2 dir = new Vector2(dx, dy).nor();
 //
 //                    Vector2 spawnPos = c.playerState.body.getPosition()
@@ -431,55 +560,9 @@ public class GameServer implements Runnable {
 //
 //                    simulation.projectiles.put(proj.id, proj);
 //                }
-//                else if (line.startsWith("MSG")) {
-//                    broadcast(line);
-//                }
 //            }
-
-            NetMessage msg;
-            while((msg = c.incoming.poll()) != null) {
-                if (msg instanceof PlayerInputMessage) {
-                    PlayerInputMessage pim = (PlayerInputMessage) msg;
-                    int sequence = pim.sequence;
-                    float dx = pim.dx;
-                    float dy = pim.dy;
-
-                    Body body = c.playerState.body;
-                    if (body == null) continue;
-
-                    Vector2 desiredVelocity = new Vector2(dx, dy)
-                        .nor()
-                        .scl(PLAYER_SPEED_MPS);
-                    body.setLinearVelocity(desiredVelocity);
-
-                    c.lastProcessedInput = sequence;
-                }
-            }
-        }
-    }
-
-    private void updateProjectiles(float delta) {
-        Iterator<ProjectileState> it = simulation.projectiles.values().iterator();
-        while (it.hasNext()) {
-            ProjectileState ps = it.next();
-            Body body = ps.body;
-            if (body == null) continue;
-
-            ps.lifeTime += delta;
-
-//            Vector2 pos = body.getPosition();
-//            ps.x = pos.x;
-//            ps.y = pos.y;
-
-//            Vector2 desiredVelocity = new Vector2(ps.vx, ps.vy).scl(BULLET_SPEED);
-//            body.setLinearVelocity(desiredVelocity);
-
-            if (ps.lifeTime >= ps.lifeTimeLimit || Math.abs(ps.x) > 100 || Math.abs(ps.y) > 100) {
-                simulation.world.destroyBody(body);
-                it.remove();
-            }
-        }
-    }
+//        }
+//    }
 
     private void broadcast(NetMessage msg) {
         if (msg instanceof EnterLoadingMessage) {

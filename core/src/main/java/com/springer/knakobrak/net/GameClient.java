@@ -4,6 +4,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import com.springer.knakobrak.net.messages.DisconnectMessage;
 import com.springer.knakobrak.net.messages.NetMessage;
 import com.springer.knakobrak.serialization.NetworkRegistry;
 
@@ -26,6 +27,8 @@ public class GameClient implements Runnable {
     private Output out;
 
     private final Queue<NetMessage> incoming = new ConcurrentLinkedQueue<>();
+
+    //private Thread thread;
     private volatile boolean connected;
 
     String host;
@@ -35,12 +38,20 @@ public class GameClient implements Runnable {
         connected = false;
         this.host = host;
         this.port = port;
+        connect();
     }
+
+//    public void start() {
+//        if (connected) return;
+//
+//        connected = true;
+//        thread = new Thread(this::run, "GameClient-Receiver");
+//        thread.start();
+//    }
 
     @Override
     public void run() {
         try {
-            connect();
             readLoop();
         } catch (IOException e) {
             e.printStackTrace();
@@ -88,8 +99,8 @@ public class GameClient implements Runnable {
     private void readLoop() throws IOException {
         NetMessage msg;
         while (connected) {
-            //msg = (NetMessage) kryo.readClassAndObject(in);
-            msg = kryo.readObject(in, NetMessage.class);
+            msg = (NetMessage) kryo.readClassAndObject(in);
+            //msg = kryo.readObject(in, NetMessage.class);
             incoming.add(msg);
         }
     }
@@ -117,6 +128,17 @@ public class GameClient implements Runnable {
 //    }
 
     public void disconnect() {
+        connected = false;
+        try {
+            socket.close();
+        } catch (IOException ignored) {}
+    }
+
+    public void disconnect(int id) {
+        DisconnectMessage dcm = new DisconnectMessage();
+        dcm.reason = "Client quit on their own volition";
+        dcm.playerId = id;
+        send(dcm);
         connected = false;
         try {
             socket.close();

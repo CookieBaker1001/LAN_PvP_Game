@@ -6,6 +6,7 @@ import com.springer.knakobrak.world.client.Wall;
 import java.util.ArrayList;
 
 public class InitWorldMessage extends NetMessage {
+    // Sent from the server during loading screen to give all clients info about the map
 
     public ArrayList<Wall> walls;
     public ArrayList<Vector2> spawnPoints;

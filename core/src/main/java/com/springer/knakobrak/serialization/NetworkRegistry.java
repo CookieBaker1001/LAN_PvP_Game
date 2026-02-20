@@ -12,13 +12,18 @@ public final class NetworkRegistry {
 
     public static void register(Kryo kryo) {
 
-        kryo.register(ArrayList.class);
-
+        kryo.register(NetMessage.class);
         kryo.register(JoinMessage.class);
+        kryo.register(JoinAcceptMessage.class);
+        kryo.register(JoinRejectedMessage.class);
+        kryo.register(StartGameMessage.class);
         kryo.register(ReadyMessage.class);
+        kryo.register(StartSimulationMessage.class);
         kryo.register(InitWorldMessage.class);
         kryo.register(PlayerInputMessage.class);
         kryo.register(PlayerSnapshotMessage.class);
+        kryo.register(DisconnectMessage.class);
+        kryo.register(WorldSnapshotMessage.class);
 
         kryo.register(PlayerState.class);
         kryo.register(ProjectileState.class);
