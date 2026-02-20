@@ -13,13 +13,11 @@ import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.world.PhysicsSimulation;
-
-import java.io.IOException;
+import com.springer.knakobrak.world.client.PlayerState;
 
 public class LobbyScreen implements Screen {
 
     private final LanPvpGame game;
-    //private ClientGameState gameState;
     private Stage stage;
     private Texture background;
 
@@ -219,22 +217,30 @@ public class LobbyScreen implements Screen {
 
     private void updatePlayerList(LobbyStateMessage msg) {
         System.out.println("Updating lobby list!");
-    }
-
-    private void updatePlayerList(String msg) {
-        // Update player list UI
-        //System.out.println("Received player list: " + msg);
-        String[] parts = msg.split("_");
         Array<String> names = new Array<>();
-        for (int i = 1; i < parts.length; i++) {
-            String entry = parts[i]; // "1:Alice"
-            String[] pair = entry.split(":");
-            if (pair.length == 2) {
-                String name = pair[1];
-                names.add(name);
-            }
+        for (PlayerState p : msg.players) {
+            String entry = p.name;
+            if (p.id == msg.hostId) entry += " (HOST)";
+            names.add(entry);
         }
         System.out.println("Updated player list: " + names);
         playerListUI.setItems(names);
     }
+
+//    private void updatePlayerList(String msg) {
+//        // Update player list UI
+//        //System.out.println("Received player list: " + msg);
+//        String[] parts = msg.split("_");
+//        Array<String> names = new Array<>();
+//        for (int i = 1; i < parts.length; i++) {
+//            String entry = parts[i]; // "1:Alice"
+//            String[] pair = entry.split(":");
+//            if (pair.length == 2) {
+//                String name = pair[1];
+//                names.add(name);
+//            }
+//        }
+//        System.out.println("Updated player list: " + names);
+//        playerListUI.setItems(names);
+//    }
 }

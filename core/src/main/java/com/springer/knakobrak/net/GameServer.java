@@ -103,7 +103,7 @@ public class GameServer implements Runnable {
     }
 
     private void handleJoin(ClientHandler sender, JoinMessage jm) {
-        System.out.println(jm.playerName + "(" + jm.protocolVersion + ") just joined!");
+        System.out.println(jm.playerName + " (v." + jm.protocolVersion + ") just joined!");
 
         int id = nextId.getAndIncrement();
 
@@ -128,6 +128,20 @@ public class GameServer implements Runnable {
         sender.send(accept);
 
         broadcastPlayerList();
+    }
+
+    private void broadcastPlayerList() {
+        LobbyStateMessage lsm = new LobbyStateMessage();
+        lsm.hostId = host.id;
+        lsm.players = new ArrayList<>();
+        for (ClientHandler c : clients.values()) {
+            PlayerState p = new PlayerState();
+            p.id = c.id;
+            p.name = c.name;
+            lsm.players.add(p);
+        }
+        System.out.println("Broadcasting players!");
+        broadcast(lsm);
     }
 
     private void removeClient(ClientHandler sender, DisconnectMessage dcm) {
@@ -327,29 +341,6 @@ public class GameServer implements Runnable {
         }
     }
 
-//    private void processMessagesInLobby() throws InterruptedException {
-//        for (ClientHandler c : clients.values()) {
-//            NetMessage msg;
-//            while ((msg = c.incoming.poll()) != null) {
-//                if (msg instanceof StartGameMessage) {
-//                    broadcast(new EnterLoadingMessage());
-//                    serverState = ServerState.LOADING;
-//                    simulation.initPhysics();
-//                    loadData();
-//                    spawnPlayers();
-//                    Thread.sleep(500);
-//                    sendInitialDataToAllClients();
-//                } else if (msg instanceof JoinMessage) {
-//                    JoinMessage jm = (JoinMessage) msg;
-//                } else if (msg instanceof DisconnectMessage) {
-//                    DisconnectMessage dcm = (DisconnectMessage) msg;
-//                    System.out.println("Player " + dcm.playerId + " left. Reason: " + dcm.reason);
-//                    c.disconnect();
-//                }
-//            }
-//        }
-//    }
-
     private void loadData() {
 //        simulation.clearWalls();
 //        simulation.clearPlayerSpawnPoints();
@@ -380,35 +371,6 @@ public class GameServer implements Runnable {
     }
 
     Set<Integer> readyClients = new HashSet<>();
-//    private void processMessagesInLoadingScreen() {
-//        for (ClientHandler c : clients.values()) {
-////            String line;
-////            while ((line = c.incoming.poll()) != null) {
-////                //if (line.equals("START_GAME") && c == host) {
-////                if (line.equals("READY")) {
-////                    readyClients.add(c.id);
-////                    if (readyClients.size() == clients.size()) {
-////                        startGame();
-////                    }
-////                }
-////            }
-//
-//            NetMessage msg;
-//            while ((msg = c.incoming.poll()) != null) {
-//                if (msg instanceof ReadyMessage) {
-//                    if (!((ReadyMessage) msg).ready) {
-//                        readyClients.remove(c);
-//                        continue;
-//                    }
-//                    readyClients.add(c.id);
-//                    if (readyClients.size() == clients.size()) {
-//                        startGame();
-//                    }
-//                }
-//            }
-//        }
-//    }
-
     private void startGame() {
         serverState = ServerState.GAME;
         broadcast(new StartSimulationMessage());
@@ -459,113 +421,10 @@ public class GameServer implements Runnable {
         c.send(iwm);
     }
 
-//    private void processGameInputs() {
-//        for (ClientHandler c : clients.values()) {
-////            String line;
-////            while ((line = c.incoming.poll()) != null) {
-////                //System.out.println("Processing input from player " + c.id + ": " + line);
-////                if (line.startsWith("MOVE")) {
-////                    String[] p = line.split(" ");
-////                    int sequence = Integer.parseInt(p[1]);
-////                    float dx = Float.parseFloat(p[2]);
-////                    float dy = Float.parseFloat(p[3]);
-////
-////                    Body body = c.playerState.body;
-////                    if (body == null) continue;
-////
-////                    Vector2 desiredVelocity = new Vector2(dx, dy)
-////                        .nor()
-////                        .scl(PLAYER_SPEED_MPS);
-////                    body.setLinearVelocity(desiredVelocity);
-////
-////                    c.lastProcessedInput = sequence;
-////                }
-////                else if (line.equals("STOP")) {
-////                    Body body = c.playerState.body;
-////                    if (body != null) {
-////                        body.setLinearVelocity(0, 0);
-////                    }
-////                }
-////                else if (line.startsWith("SHOOT")) {
-////                    String[] p = line.split(" ");
-////                    float dx = Float.parseFloat(p[1]);
-////                    float dy = Float.parseFloat(p[2]);
-////                    ProjectileState proj = new ProjectileState();
-////                    proj.id = nextProjectileId++;
-////                    //proj.ownerId = c.id;
-////                    Vector2 dir = new Vector2(dx, dy).nor();
-////
-////                    Vector2 spawnPos = c.playerState.body.getPosition()
-////                        .cpy()
-////                        .add(dir.scl(BULLET_SPAWN_OFFSET_M));
-////
-////                    proj.body = LoadUtillities.createProjectile(
-////                        simulation.world,
-////                        spawnPos.x,
-////                        spawnPos.y,
-////                        proj.id
-////                    );
-////
-////                    proj.body.setLinearVelocity(
-////                        dir.scl(BULLET_SPEED_MPS)
-////                    );
-////
-////                    simulation.projectiles.put(proj.id, proj);
-////                }
-////                else if (line.startsWith("MSG")) {
-////                    broadcast(line);
-////                }
-////            }
-//
-//            NetMessage msg;
-//            while((msg = c.incoming.poll()) != null) {
-//                if (msg instanceof PlayerInputMessage) {
-//                    PlayerInputMessage pim = (PlayerInputMessage) msg;
-//                    int sequence = pim.sequence;
-//                    float dx = pim.dx;
-//                    float dy = pim.dy;
-//
-//                    Body body = c.playerState.body;
-//                    if (body == null) continue;
-//
-//                    Vector2 desiredVelocity = new Vector2(dx, dy)
-//                        .nor()
-//                        .scl(PLAYER_SPEED_MPS);
-//                    body.setLinearVelocity(desiredVelocity);
-//
-//                    c.lastProcessedInput = sequence;
-//                } else if (msg instanceof SpawnProjectileMessage) {
-//                    SpawnProjectileMessage spm = (SpawnProjectileMessage) msg;
-//                    float dx = spm.x;
-//                    float dy = spm.y;
-//                    ProjectileState proj = new ProjectileState();
-//                    proj.id = nextProjectileId++;
-//                    proj.ownerId = c.id;
-//                    Vector2 dir = new Vector2(dx, dy).nor();
-//
-//                    Vector2 spawnPos = c.playerState.body.getPosition()
-//                        .cpy()
-//                        .add(dir.scl(BULLET_SPAWN_OFFSET_M));
-//
-//                    proj.body = LoadUtillities.createProjectile(
-//                        simulation.world,
-//                        spawnPos.x,
-//                        spawnPos.y,
-//                        proj.id
-//                    );
-//
-//                    proj.body.setLinearVelocity(
-//                        dir.scl(BULLET_SPEED_MPS)
-//                    );
-//
-//                    simulation.projectiles.put(proj.id, proj);
-//                }
-//            }
-//        }
-//    }
-
     private void broadcast(NetMessage msg) {
-        if (msg instanceof EnterLoadingMessage) {
+        if (msg instanceof JoinMessage) {
+            clients.values().forEach(c -> c.send(msg));
+        } else if (msg instanceof EnterLoadingMessage) {
             clients.values().forEach(c -> c.send(msg));
         }
     }
@@ -580,19 +439,6 @@ public class GameServer implements Runnable {
 //        }
 //        broadcast(sb.toString());
 //    }
-
-    private void broadcastPlayerList() {
-        LobbyStateMessage lsm = new LobbyStateMessage();
-        lsm.hostId = host.id;
-        lsm.players = new ArrayList<>();
-        for (ClientHandler c : clients.values()) {
-            PlayerState p = new PlayerState();
-            p.id = c.id;
-            p.name = c.name;
-            lsm.players.add(p);
-        }
-        broadcast(lsm);
-    }
 
     private void broadcastGameState() {
         WorldSnapshotMessage wsm = new WorldSnapshotMessage();

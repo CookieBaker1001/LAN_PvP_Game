@@ -17,6 +17,7 @@ public final class NetworkRegistry {
         kryo.register(JoinAcceptMessage.class);
         kryo.register(JoinRejectedMessage.class);
         kryo.register(StartGameMessage.class);
+        kryo.register(EnterLoadingMessage.class);
         kryo.register(ReadyMessage.class);
         kryo.register(StartSimulationMessage.class);
         kryo.register(InitWorldMessage.class);
