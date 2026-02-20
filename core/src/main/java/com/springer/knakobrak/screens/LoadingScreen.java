@@ -4,7 +4,10 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.math.Vector2;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.dto.PlayerStateDTO;
+import com.springer.knakobrak.dto.WallDTO;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.util.Constants;
@@ -68,16 +71,19 @@ public class LoadingScreen implements Screen {
 
     private void handleMessage(NetMessage msg) {
 
-        if (msg instanceof LobbyStateMessage) {
-            System.out.println("Receiving player data!");
-        }
         if (msg instanceof LoadingCompleteMessage) {
+            System.out.println("[C]: INIT_COMPLETE");
+
+        } else if (msg instanceof StartSimulationMessage) {
+            System.out.println("[C]: START_SIMULATION");
             gameStart = true;
         } else if (msg instanceof InitPlayerMessage) {
-            System.out.println("INIT_PLAYER");
+            System.out.println("[C]: INIT_PLAYER");
             receivePlayerData((InitPlayerMessage) msg);
+        } else if (msg instanceof InitWorldMessage) {
+            System.out.println("[C]: INIT_WORLD");
+            receiveWorldData((InitWorldMessage) msg);
         }
-
 
 //        if (msg.startsWith("INIT_PLAYER")) {
 //            //System.out.println("INIT_PLAYER");
@@ -107,20 +113,31 @@ public class LoadingScreen implements Screen {
     }
 
     private void receivePlayerData(InitPlayerMessage msg) {
-        int id = msg.player.id;
-        float x = msg.player.x;
-        float y = msg.player.y;
-        PlayerState newPlayer = new PlayerState();
-        newPlayer.id = id;
-        newPlayer.x = x;
-        newPlayer.y = y;
-        newPlayer.body = LoadUtillities.createPlayerBody(game.simulation.world, x, y, id);
-        game.simulation.players.put(id, newPlayer);
+        PlayerState p = PlayerStateDTO.fromDTO(msg.player);
+        p.body = LoadUtillities.createPlayerBody(game.simulation.world,  p.x, p.y, p.id);
+        game.simulation.players.put(p.id, p);
 //        if (id == game.playerId) {
 //            game.localPlayer = newPlayer;
 //        }
-        System.out.println("Added player with id " + id);
+        System.out.println("Added player with id " + p.id);
         //gameState.players.put(id, newPlayer);
+    }
+
+    private void receiveWorldData(InitWorldMessage msg) {
+        game.simulation.clearWalls();
+        game.simulation.playerSpawnPoints = msg.spawnPoints;
+        for (WallDTO wDTO : msg.walls) {
+            Wall w = new Wall();
+            w.x = wDTO.x;
+            w.y = wDTO.y;
+            w.width = wDTO.width;
+            w.height = wDTO.height;
+            w.body = LoadUtillities.createWall(game.simulation.world, w.x, w.y, (int)w.height, (int)w.width);
+            game.simulation.addWall(w);
+        }
+        ReadyMessage rm = new ReadyMessage();
+        rm.ready = true;
+        game.client.send(rm);
     }
 
     private void receiveWalls(String msg) {

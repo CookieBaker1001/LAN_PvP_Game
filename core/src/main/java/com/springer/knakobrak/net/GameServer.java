@@ -3,6 +3,9 @@ package com.springer.knakobrak.net;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
+import com.springer.knakobrak.dto.PlayerStateDTO;
+import com.springer.knakobrak.dto.ProjectileStateDTO;
+import com.springer.knakobrak.dto.WallDTO;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.PhysicsSimulation;
@@ -26,7 +29,7 @@ import static com.springer.knakobrak.util.Constants.*;
 public class GameServer implements Runnable {
 
     private ServerSocket serverSocket;
-    private Thread gameThread;
+    private Thread sevrerThread;
     private int port;
     private volatile boolean running = true;
 
@@ -78,15 +81,46 @@ public class GameServer implements Runnable {
 
     volatile ServerState serverState = ServerState.LOBBY;
 
+    @Override
+    public void run() {
+        try {
+            System.out.println("Game server started on port " + port);
+            sevrerThread = new Thread(this::gameLoop, "Game loop");
+            sevrerThread.start();
 
+            while (running) {
+                Socket socket = serverSocket.accept();
+                ClientHandler client = new ClientHandler(this, socket);
+
+                Thread clientThread = new Thread(client);
+                clientThread.start();
+
+                System.out.println("New client connected!");
+//                if (host == null) {
+//                    host = client;
+//                    System.out.println("Host connected.");
+//                } else System.out.println("New client connected");
+            }
+        } catch (IOException e) {
+            if (running) {
+                System.out.println("Server error: " + e.getMessage());
+                e.printStackTrace();
+            }
+        } finally {
+            shutdown();
+        }
+    }
 
     void handleLobbyMessage(ClientHandler sender, NetMessage msg) {
         if (msg instanceof StartGameMessage && sender == host) {
+            System.out.println("Start game");
             transitionToLoading();
         } else if (msg instanceof JoinMessage) {
+            System.out.println("Join game");
             JoinMessage jm = (JoinMessage) msg;
             handleJoin(sender, jm);
         } else if (msg instanceof DisconnectMessage) {
+            System.out.println("Disconnecting from game");
             DisconnectMessage dcm = (DisconnectMessage) msg;
             removeClient(sender, dcm);
         }
@@ -108,6 +142,7 @@ public class GameServer implements Runnable {
         int id = nextId.getAndIncrement();
 
         sender.id = id;
+        sender.name = jm.playerName;
         sender.isHost = clients.isEmpty();
         if (clients.isEmpty()) {
             host = sender;
@@ -119,6 +154,7 @@ public class GameServer implements Runnable {
         ps.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
 
         simulation.players.put(id, ps);
+        sender.playerState = ps;
         clients.put(id, sender);
 
         JoinAcceptMessage accept = new JoinAcceptMessage();
@@ -135,9 +171,7 @@ public class GameServer implements Runnable {
         lsm.hostId = host.id;
         lsm.players = new ArrayList<>();
         for (ClientHandler c : clients.values()) {
-            PlayerState p = new PlayerState();
-            p.id = c.id;
-            p.name = c.name;
+            PlayerStateDTO p = PlayerStateDTO.toDTO(c.playerState);
             lsm.players.add(p);
         }
         System.out.println("Broadcasting players!");
@@ -153,6 +187,7 @@ public class GameServer implements Runnable {
     void processServerMessages() {
         ServerMessage sm;
         while ((sm = inbox.poll()) != null) {
+            System.out.println("Sender: " + sm);
             dispatchMessage(sm.sender, sm.message);
         }
     }
@@ -229,38 +264,9 @@ public class GameServer implements Runnable {
         }
     }
 
-    @Override
-    public void run() {
-        try {
-            System.out.println("Game server started on port " + port);
-            gameThread = new Thread(this::gameLoop, "Game loop");
-            gameThread.start();
-
-            while (running) {
-                Socket socket = serverSocket.accept();
-                ClientHandler client = new ClientHandler(this, socket);
-
-                Thread clientThread = new Thread(client);
-                clientThread.start();
-
-                System.out.println("New client connected!");
-//                if (host == null) {
-//                    host = client;
-//                    System.out.println("Host connected.");
-//                } else System.out.println("New client connected");
-            }
-        } catch (IOException e) {
-            if (running) {
-                System.out.println("Server error: " + e.getMessage());
-                e.printStackTrace();
-            }
-        } finally {
-            shutdown();
-        }
-    }
-
     public void enqueue(ServerMessage sm) {
         //inbox.offer(sm);
+        //System.out.println("Received something!");
         inbox.add(sm);
     }
 
@@ -391,9 +397,7 @@ public class GameServer implements Runnable {
         // Send player list
         for (PlayerState p : simulation.players.values()) {
             InitPlayerMessage ipm = new InitPlayerMessage();
-            ipm.player.id = p.id;
-            ipm.player.x = p.x;
-            ipm.player.y = p.y;
+            ipm.player = PlayerStateDTO.toDTO(p);
             c.send(ipm);
             //c.send("INIT_PLAYER " + p.id + " " + p.x + " " + p.y);
         }
@@ -415,18 +419,22 @@ public class GameServer implements Runnable {
 
         InitWorldMessage iwm = new InitWorldMessage();
 
-        iwm.walls = simulation.walls;
+        iwm.walls = WallDTO.toDTO(simulation.walls);
         iwm.spawnPoints = simulation.playerSpawnPoints;
 
         c.send(iwm);
     }
 
     private void broadcast(NetMessage msg) {
-        if (msg instanceof JoinMessage) {
-            clients.values().forEach(c -> c.send(msg));
-        } else if (msg instanceof EnterLoadingMessage) {
-            clients.values().forEach(c -> c.send(msg));
-        }
+        clients.values().forEach(c -> c.send(msg));
+
+//        if (msg instanceof JoinMessage) {
+//            clients.values().forEach(c -> c.send(msg));
+//        } else if () {
+//            clients.values().forEach(c -> c.send(msg));
+//        } else if (msg instanceof EnterLoadingMessage) {
+//            clients.values().forEach(c -> c.send(msg));
+//        }
     }
 
 //    private void broadcastWalls() {
@@ -445,18 +453,20 @@ public class GameServer implements Runnable {
         wsm.players = new ArrayList<>();
 
         for (ClientHandler c : clients.values()) {
-            PlayerState p = new PlayerState();
-            p.id = c.id;
-            p.x = c.playerState.x;
-            p.y = c.playerState.y;
+            PlayerStateDTO p = PlayerStateDTO.toDTO(c.playerState);
+//            PlayerStateDTO p = new PlayerStateDTO();
+//            p.id = c.id;
+//            p.x = c.playerState.x;
+//            p.y = c.playerState.y;
             wsm.players.add(p);
         }
         wsm.projectiles = new ArrayList<>();
         for (ProjectileState p : simulation.projectiles.values()) {
-            ProjectileState p2 = new ProjectileState();
-            p2.id = p.id;
-            p2.x = p.x;
-            p2.y = p.y;
+            ProjectileStateDTO p2 = ProjectileStateDTO.toDTO(p);
+//            ProjectileStateDTO p2 = new ProjectileStateDTO();
+//            p2.id = p.id;
+//            p2.x = p.x;
+//            p2.y = p.y;
             wsm.projectiles.add(p2);
         }
         broadcast(wsm);

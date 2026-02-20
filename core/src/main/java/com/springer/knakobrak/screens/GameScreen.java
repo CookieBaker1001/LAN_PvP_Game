@@ -413,17 +413,19 @@ public class GameScreen implements Screen {
         });
     }
 
-    private void onServerSnapshot(PlayerSnapshotMessage snap) {
-        if (snap.id != localPlayer.id) return;
+    private void onServerSnapshot(PlayerSnapshotMessage psm) {
+        if (psm.id != localPlayer.id) return;
 
         // 1️⃣ Correct position
         Body body = localPlayer.body;
-        body.setTransform(snap.position, body.getAngle());
-        body.setLinearVelocity(snap.velocity);
+        Vector2 position = new Vector2(psm.positionX, psm.positionY);
+        body.setTransform(position, body.getAngle());
+        Vector2 velocity = new Vector2(psm.velocityX, psm.velocityY);
+        body.setLinearVelocity(velocity);
 
         // 2️⃣ Drop acknowledged inputs
         pendingInputs.removeIf(
-            input -> input.sequence <= snap.lastProcessedInput
+            input -> input.sequence <= psm.lastProcessedInput
         );
 
         // 3️⃣ Re-apply remaining inputs

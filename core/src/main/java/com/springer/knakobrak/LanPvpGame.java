@@ -19,6 +19,7 @@ public class LanPvpGame extends Game {
     public FitViewport viewport;
 
     public GameClient client;
+    public Thread clientThread;
     public GameServer hostedServer;
     public Thread serverThread;
 

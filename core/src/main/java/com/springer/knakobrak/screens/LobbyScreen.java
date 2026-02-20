@@ -11,6 +11,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.dto.PlayerStateDTO;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.world.client.PlayerState;
@@ -218,8 +219,10 @@ public class LobbyScreen implements Screen {
     private void updatePlayerList(LobbyStateMessage msg) {
         System.out.println("Updating lobby list!");
         Array<String> names = new Array<>();
-        for (PlayerState p : msg.players) {
-            String entry = p.name;
+        for (PlayerStateDTO p : msg.players) {
+            String entry = "";
+            if (p.id == game.playerId) entry += "(You) ";
+            entry += p.name;
             if (p.id == msg.hostId) entry += " (HOST)";
             names.add(entry);
         }

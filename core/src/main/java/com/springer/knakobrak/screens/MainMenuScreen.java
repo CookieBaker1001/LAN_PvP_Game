@@ -82,12 +82,17 @@ public class MainMenuScreen implements Screen {
                 game.username = nameInput.getText();
                 try {
                     game.hostedServer = new GameServer(game.port);
-                    game.serverThread = new Thread(game.hostedServer);
+                    game.serverThread = new Thread(game.hostedServer, "GameServer");
                     game.serverThread.start();
+
                     game.client = new GameClient("localhost", game.port);
+                    game.clientThread = new Thread(game.client, "GameClient");
+                    game.clientThread.start();
+
                     JoinMessage msg = new JoinMessage();
                     msg.playerName = game.username;
                     game.client.send(msg);
+
                     game.setScreen(new LobbyScreen(game, true));
                 } catch (IOException e) {
                     statusLabel.setText("Port is busy");
@@ -102,9 +107,13 @@ public class MainMenuScreen implements Screen {
                 game.username = nameInput.getText();
                 try {
                     game.client = new GameClient("localhost", game.port);
+                    game.clientThread = new Thread(game.client, "GameClient");
+                    game.clientThread.start();
+
                     JoinMessage msg = new JoinMessage();
                     msg.playerName = game.username;
                     game.client.send(msg);
+
                     game.setScreen(new LobbyScreen(game, false));
                 } catch (IOException e) {
                     statusLabel.setText("Failed to connect");

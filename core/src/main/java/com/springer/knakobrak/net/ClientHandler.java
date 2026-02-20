@@ -73,13 +73,15 @@ public class ClientHandler implements Runnable {
     private void readLoop() throws IOException {
         NetMessage msg;
         while (!socket.isClosed()) {
+            System.out.println("Found something!");
             msg = (NetMessage) kryo.readClassAndObject(in);
             server.enqueue(new ServerMessage(this, msg));
         }
     }
 
     public synchronized void send(NetMessage msg) {
-        System.out.println("Sending message to client!");
+        //System.out.println("Sending message to client!");
+        System.out.println("Sending a " + msg.getClass() + " type package");
         kryo.writeClassAndObject(out, msg);
         out.flush();
     }
