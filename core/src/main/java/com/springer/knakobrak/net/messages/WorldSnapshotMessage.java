@@ -1,13 +1,14 @@
 package com.springer.knakobrak.net.messages;
 
-import com.badlogic.gdx.math.Vector2;
+import com.springer.knakobrak.world.client.PlayerState;
+import com.springer.knakobrak.world.client.ProjectileState;
+
+import java.util.ArrayList;
 
 public class WorldSnapshotMessage extends NetMessage {
 
-    public int id;
-    public Vector2 position;
-    public Vector2 velocity;
-    public int lastProcessedInput;
+    public ArrayList<PlayerState> players;
+    public ArrayList<ProjectileState> projectiles;
 
     public WorldSnapshotMessage() {
     }

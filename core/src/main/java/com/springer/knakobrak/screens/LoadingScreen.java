@@ -5,10 +5,7 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.springer.knakobrak.LanPvpGame;
-import com.springer.knakobrak.net.messages.LoadingCompleteMessage;
-import com.springer.knakobrak.net.messages.LobbyStateMessage;
-import com.springer.knakobrak.net.messages.NetMessage;
-import com.springer.knakobrak.net.messages.ReadyMessage;
+import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.util.Constants;
 import com.springer.knakobrak.world.client.PlayerState;
@@ -73,8 +70,12 @@ public class LoadingScreen implements Screen {
 
         if (msg instanceof LobbyStateMessage) {
             System.out.println("Receiving player data!");
-        } else if (msg instanceof LoadingCompleteMessage) {
+        }
+        if (msg instanceof LoadingCompleteMessage) {
             gameStart = true;
+        } else if (msg instanceof InitPlayerMessage) {
+            System.out.println("INIT_PLAYER");
+            receivePlayerData((InitPlayerMessage) msg);
         }
 
 
@@ -105,11 +106,10 @@ public class LoadingScreen implements Screen {
 //        }
     }
 
-    private void receivePlayerData(String msg) {
-        String[] parts = msg.split(" ");
-        int id = Integer.parseInt(parts[1]);
-        float x = Float.parseFloat(parts[2]);
-        float y = Float.parseFloat(parts[3]);
+    private void receivePlayerData(InitPlayerMessage msg) {
+        int id = msg.player.id;
+        float x = msg.player.x;
+        float y = msg.player.y;
         PlayerState newPlayer = new PlayerState();
         newPlayer.id = id;
         newPlayer.x = x;

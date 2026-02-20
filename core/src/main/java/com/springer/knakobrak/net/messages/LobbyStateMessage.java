@@ -6,8 +6,8 @@ import java.util.List;
 
 public class LobbyStateMessage extends NetMessage {
 
-    List<PlayerState> players;
-    int hostId;
+    public List<PlayerState> players;
+    public int hostId;
 
     public LobbyStateMessage() {
     }

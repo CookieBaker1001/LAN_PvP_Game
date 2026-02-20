@@ -20,7 +20,7 @@ import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.net.messages.ChatMessage;
 import com.springer.knakobrak.net.messages.NetMessage;
 import com.springer.knakobrak.net.messages.PlayerInputMessage;
-import com.springer.knakobrak.net.messages.WorldSnapshotMessage;
+import com.springer.knakobrak.net.messages.PlayerSnapshotMessage;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.util.Constants;
@@ -413,7 +413,7 @@ public class GameScreen implements Screen {
         });
     }
 
-    private void onServerSnapshot(WorldSnapshotMessage snap) {
+    private void onServerSnapshot(PlayerSnapshotMessage snap) {
         if (snap.id != localPlayer.id) return;
 
         // 1️⃣ Correct position

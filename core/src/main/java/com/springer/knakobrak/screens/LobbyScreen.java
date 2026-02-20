@@ -11,10 +11,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
-import com.springer.knakobrak.net.messages.JoinAcceptMessage;
-import com.springer.knakobrak.net.messages.LobbyStateMessage;
-import com.springer.knakobrak.net.messages.NetMessage;
-import com.springer.knakobrak.net.messages.StartGameMessage;
+import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.world.PhysicsSimulation;
 
 import java.io.IOException;
@@ -128,16 +125,10 @@ public class LobbyScreen implements Screen {
         stage.draw();
     }
 
-    private boolean startGame() {
-        try {
-            System.out.println("Host starting game...");
-            StartGameMessage msg = new StartGameMessage();
-            game.client.send(msg);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return false;
-        }
-        return true;
+    private void startGame() {
+        System.out.println("Host starting game...");
+        StartGameMessage msg = new StartGameMessage();
+        game.client.send(msg);
     }
 
     @Override public void resize(int width, int height) {
@@ -168,7 +159,15 @@ public class LobbyScreen implements Screen {
         } else if (msg instanceof LobbyStateMessage) {
             LobbyStateMessage lobbyMsg = (LobbyStateMessage)msg;
             updatePlayerList(lobbyMsg);
+        } else if (msg instanceof EnterLoadingMessage) {
+            simulation.initPhysics();
+            game.setScreen(new LoadingScreen(game));
+        } else if (msg instanceof DisconnectMessage) {
+            System.out.println(((DisconnectMessage) msg).reason);
+            game.cleanupNetworking();
+            game.setScreen(new MainMenuScreen(game));
         }
+
 //        if (msg.startsWith("ASSIGNED_ID")) {
 //            String[] data = msg.split(" ");
 //            game.playerId = Integer.parseInt(data[1]);

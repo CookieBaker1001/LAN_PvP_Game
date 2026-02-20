@@ -18,7 +18,7 @@ public final class NetworkRegistry {
         kryo.register(ReadyMessage.class);
         kryo.register(InitWorldMessage.class);
         kryo.register(PlayerInputMessage.class);
-        kryo.register(WorldSnapshotMessage.class);
+        kryo.register(PlayerSnapshotMessage.class);
 
         kryo.register(PlayerState.class);
         kryo.register(ProjectileState.class);
