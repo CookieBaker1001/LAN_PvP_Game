@@ -5,10 +5,16 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.net.messages.LoadingCompleteMessage;
+import com.springer.knakobrak.net.messages.LobbyStateMessage;
+import com.springer.knakobrak.net.messages.NetMessage;
+import com.springer.knakobrak.net.messages.ReadyMessage;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.util.Constants;
 import com.springer.knakobrak.world.client.PlayerState;
 import com.springer.knakobrak.world.client.Wall;
+
+import java.io.IOException;
 
 public class LoadingScreen implements Screen {
 
@@ -50,7 +56,7 @@ public class LoadingScreen implements Screen {
         game.batch.draw(background, 0, 0, worldWidth, worldHeight);
         game.batch.end();
 
-        //game.client.poll(this::handleMessage);
+        game.client.poll(this::handleMessage);
 //        stage.act(delta);
 //        stage.draw();
 
@@ -63,7 +69,15 @@ public class LoadingScreen implements Screen {
         }
     }
 
-    private void handleMessage(String msg) {
+    private void handleMessage(NetMessage msg) {
+
+        if (msg instanceof LobbyStateMessage) {
+            System.out.println("Receiving player data!");
+        } else if (msg instanceof LoadingCompleteMessage) {
+            gameStart = true;
+        }
+
+
 //        if (msg.startsWith("INIT_PLAYER")) {
 //            //System.out.println("INIT_PLAYER");
 //            receivePlayerData(msg);
@@ -77,7 +91,14 @@ public class LoadingScreen implements Screen {
 //        } else if (msg.equals("INIT_DONE")) {
 //            //System.out.println("INIT_DONE");
 //            initDone = true;
-//            game.client.send("READY");
+//            try {
+//                ReadyMessage readyMessage = new ReadyMessage();
+//                readyMessage.ready = true;
+//                game.client.send(readyMessage);
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+//            //game.client.send("READY");
 //        } else if (msg.equals("START_GAME")) {
 //            //System.out.println("START_GAME");
 //            gameStart = true;

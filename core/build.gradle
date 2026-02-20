@@ -6,6 +6,7 @@ dependencies {
 
   implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
   implementation "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
+  implementation "com.esotericsoftware:kryo:5.5.0"
 
   if(enableGraalNative == 'true') {
     implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"

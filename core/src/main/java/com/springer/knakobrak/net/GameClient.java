@@ -1,7 +1,11 @@
 package com.springer.knakobrak.net;
 
 import com.badlogic.gdx.graphics.Color;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.springer.knakobrak.net.messages.NetMessage;
+import com.springer.knakobrak.serialization.NetworkRegistry;
 
 import java.io.*;
 import java.net.Socket;
@@ -16,8 +20,10 @@ public class GameClient implements Runnable {
     //private BufferedReader in;
     //private PrintWriter out;
 
-    private DataInputStream in;
-    private DataOutputStream out;
+    private Kryo kryo;
+
+    private Input in;
+    private Output out;
 
     private final Queue<NetMessage> incoming = new ConcurrentLinkedQueue<>();
     private volatile boolean connected;
@@ -46,8 +52,11 @@ public class GameClient implements Runnable {
     private void connect() throws IOException {
         socket = new Socket(host, port);
 
-        in = new DataInputStream(socket.getInputStream());
-        out = new DataOutputStream(socket.getOutputStream());
+        kryo = new Kryo();
+        NetworkRegistry.register(kryo);
+
+        in = new Input(socket.getInputStream());
+        out = new Output(socket.getOutputStream());
 
 //        out = new PrintWriter(
 //            new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8),
@@ -77,16 +86,16 @@ public class GameClient implements Runnable {
 //    }
 
     private void readLoop() throws IOException {
+        NetMessage msg;
         while (connected) {
-            int messageType = in.readInt(); // blocks safely
-
-            NetMessage msg = NetMessage.read(messageType, in);
+            //msg = (NetMessage) kryo.readClassAndObject(in);
+            msg = kryo.readObject(in, NetMessage.class);
             incoming.add(msg);
         }
     }
 
-    public synchronized void send(NetMessage msg) throws IOException {
-        msg.write(out);
+    public synchronized void send(NetMessage msg) {
+        kryo.writeClassAndObject(out, msg);
         out.flush();
     }
 

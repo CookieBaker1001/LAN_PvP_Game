@@ -18,6 +18,7 @@ import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
+import com.springer.knakobrak.net.messages.JoinMessage;
 
 import java.io.IOException;
 
@@ -84,7 +85,10 @@ public class MainMenuScreen implements Screen {
                     game.serverThread = new Thread(game.hostedServer);
                     game.serverThread.start();
                     game.client = new GameClient("localhost", game.port);
-                    game.client.send(game.username);
+                    JoinMessage msg = new JoinMessage();
+                    msg.playerName = game.username;
+                    game.client.send(msg);
+                    //game.client.send(game.username);
                     game.setScreen(new LobbyScreen(game, true));
                 } catch (IOException e) {
                     statusLabel.setText("Port is busy");
@@ -100,7 +104,10 @@ public class MainMenuScreen implements Screen {
                 try {
                     game.client = new GameClient("localhost", game.port);
                     //game.client.connect("localhost", port);
-                    game.client.send(game.username);
+                    JoinMessage msg = new JoinMessage();
+                    msg.playerName = game.username;
+                    game.client.send(msg);
+                    //game.client.send(game.username);
                     game.setScreen(new LobbyScreen(game, false));
                 } catch (IOException e) {
                     statusLabel.setText("Failed to connect");

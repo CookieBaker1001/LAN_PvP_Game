@@ -3,18 +3,23 @@ package com.springer.knakobrak.net;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import com.springer.knakobrak.net.messages.*;
+import com.springer.knakobrak.serialization.NetworkRegistry;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.world.client.PlayerState;
 import com.springer.knakobrak.world.client.ProjectileState;
 import com.springer.knakobrak.world.client.Wall;
 import com.badlogic.gdx.physics.box2d.*;
+import com.sun.security.ntlm.Server;
 //import com.sun.security.ntlm.Server.*;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -23,6 +28,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.springer.knakobrak.util.Constants.*;
 
 public class GameServer implements Runnable {
+
+    private Server server;
 
     private ServerSocket serverSocket;
     private int port;
@@ -83,32 +90,32 @@ public class GameServer implements Runnable {
 
         private int id;
         private String name;
+
         private Socket socket;
-        private BufferedReader in;
-        private PrintWriter out;
+        private Kryo kryo;
+        Input in;
+        Output out;
+
         private boolean isHost;
 
-        private final Queue<String> messageQueue = new ConcurrentLinkedQueue<>();
+        private final Queue<NetMessage> incoming = new ConcurrentLinkedQueue<>();
         public PlayerState playerState;
 
         public int lastProcessedInput = 0;
 
         ClientHandler(Socket socket) throws IOException {
             this.socket = socket;
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-            out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+            kryo = new Kryo();
+            NetworkRegistry.register(kryo);
+            in = new Input(socket.getInputStream());
+            out = new Output(socket.getOutputStream());
         }
 
         @Override
         public void run() {
             try {
                 handshake();
-                String line;
-                while ((line = in.readLine()) != null) {
-                    //System.out.println("Hi");
-                    messageQueue.add(line); // thread-safe queue
-                }
-                //System.out.println("Done...");
+                readLoop();
             } catch (IOException e) {
                 //System.out.println("Something went wrong!");
                 e.printStackTrace();
@@ -118,12 +125,27 @@ public class GameServer implements Runnable {
             }
         }
 
-        public void send(String msg) {
-            out.println(msg);
+        private void readLoop() throws IOException {
+//                while ((line = in.readLine()) != null) {
+//                    //System.out.println("Hi");
+//                    messageQueue.add(line); // thread-safe queue
+//                }
+            NetMessage msg;
+            while (!socket.isClosed()) {
+                //msg = (NetMessage) kryo.readClassAndObject(in);
+                msg = kryo.readObject(in, NetMessage.class);
+                incoming.add(msg);
+            }
+            //System.out.println("Done...");
+        }
+
+        public synchronized void send(NetMessage msg) {
+            kryo.writeClassAndObject(out, msg);
+            out.flush();
         }
 
         private void handshake() throws IOException {
-            name = in.readLine();
+            //name = in.readLine();
             id = nextId.getAndIncrement();
             if (clients.isEmpty()) {
                 host = this;
@@ -141,7 +163,7 @@ public class GameServer implements Runnable {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            out.println("ASSIGNED_ID " + id);
+            //out.println("ASSIGNED_ID " + id);
             broadcastPlayerList();
             //broadcastWalls();
         }
@@ -226,10 +248,10 @@ public class GameServer implements Runnable {
     private void processMessagesInLobby() throws InterruptedException {
         for (ClientHandler c : clients.values()) {
             String line;
-            while ((line = c.messageQueue.poll()) != null) {
-                //if (line.equals("START_GAME") && c == host) {
-                if (line.startsWith("START_GAME") && c == host) {
-                    broadcast("ENTER_LOADING");
+            NetMessage msg;
+            while ((msg = c.incoming.poll()) != null) {
+                if (msg instanceof StartGameMessage) {
+                    broadcast(new EnterLoadingMessage());
                     serverState = ServerState.LOADING;
                     simulation.initPhysics();
                     loadData();
@@ -238,6 +260,18 @@ public class GameServer implements Runnable {
                     sendInitialDataToAllClients();
                 }
             }
+//            while ((line = c.incoming.poll()) != null) {
+//                //if (line.equals("START_GAME") && c == host) {
+//                if (line.startsWith("START_GAME") && c == host) {
+//                    broadcast("ENTER_LOADING");
+//                    serverState = ServerState.LOADING;
+//                    simulation.initPhysics();
+//                    loadData();
+//                    spawnPlayers();
+//                    Thread.sleep(500);
+//                    sendInitialDataToAllClients();
+//                }
+//            }
         }
     }
 
@@ -274,7 +308,7 @@ public class GameServer implements Runnable {
     private void processMessagesInLoadingScreen() {
         for (ClientHandler c : clients.values()) {
             String line;
-            while ((line = c.messageQueue.poll()) != null) {
+            while ((line = c.incoming.poll()) != null) {
                 //if (line.equals("START_GAME") && c == host) {
                 if (line.equals("READY")) {
                     readyClients.add(c.id);
@@ -304,47 +338,41 @@ public class GameServer implements Runnable {
 
         // Send player list
         for (PlayerState p : simulation.players.values()) {
-            c.send("INIT_PLAYER " + p.id + " " + p.x + " " + p.y);
+            InitPlayerMessage ipm = new InitPlayerMessage();
+            ipm.player.id = p.id;
+            ipm.player.x = p.x;
+            ipm.player.y = p.y;
+            c.send(ipm);
+            //c.send("INIT_PLAYER " + p.id + " " + p.x + " " + p.y);
         }
 
         // Send wall map
         sendWallLayout(c);
 
-        c.send("INIT_DONE");
+        //c.send("INIT_DONE");
+
+        c.send(new StartSimulationMessage());
     }
 
     void sendWallLayout(ClientHandler c) {
 
-        int mapWidth = (int) (worldWidth * PIXELS_PER_METER);
-        int mapHeight = (int) (worldHeight * PIXELS_PER_METER);
-
-        c.send("INIT_MAP " + mapWidth + " " + mapHeight);
-
-        StringBuilder sb = new StringBuilder("INIT_MAP_WALLS");
-        for (Wall w : simulation.walls) {
-            sb.append(" ").append(w.x)
-                .append(" ").append(w.y)
-                .append(" ").append(w.width)
-                .append(" ").append(w.height);
-        }
-        c.send(sb.toString());
-
-//        for (int y = 0; y < mapHeight; y++) {
-//            StringBuilder row = new StringBuilder("INIT_MAP_ROW ");
-//            row.append(y);
+//        int mapWidth = (int) (worldWidth * PIXELS_PER_METER);
+//        int mapHeight = (int) (worldHeight * PIXELS_PER_METER);
 //
-//            for (int x = 0; x < mapWidth; x++) {
-//                row.append(" ").append(map[y][x]);
-//            }
-//
-//            c.send(row.toString());
-//        }
+//        c.send("INIT_MAP " + mapWidth + " " + mapHeight);
+
+        InitWorldMessage iwm = new InitWorldMessage();
+
+        iwm.walls = simulation.walls;
+        iwm.spawnPoints = simulation.playerSpawnPoints;
+
+        c.send(iwm);
     }
 
     private void processGameInputs() {
         for (ClientHandler c : clients.values()) {
             String line;
-            while ((line = c.messageQueue.poll()) != null) {
+            while ((line = c.incoming.poll()) != null) {
                 //System.out.println("Processing input from player " + c.id + ": " + line);
                 if (line.startsWith("MOVE")) {
                     String[] p = line.split(" ");
@@ -424,8 +452,10 @@ public class GameServer implements Runnable {
         }
     }
 
-    private void broadcast(String msg) {
-        clients.values().forEach(c -> c.out.println(msg));
+    private void broadcast(NetMessage msg) {
+        if (msg instanceof EnterLoadingMessage) {
+            clients.values().forEach(c -> c.send(msg));
+        }
     }
 
     private void broadcastWalls() {

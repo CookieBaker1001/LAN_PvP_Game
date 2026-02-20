@@ -1,25 +1,20 @@
 package com.springer.knakobrak.net.messages;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import com.badlogic.gdx.math.Vector2;
+import com.springer.knakobrak.world.client.Wall;
+
+import java.util.ArrayList;
 
 public class InitWorldMessage extends NetMessage {
 
-    public static final int TYPE = 8;
+    public ArrayList<Wall> walls;
+    public ArrayList<Vector2> spawnPoints;
 
-    int level;
-
-    @Override
-    public void write(DataOutputStream out) throws IOException {
-        out.write(TYPE);
-        out.write(level);
+    public InitWorldMessage() {
     }
 
-    // Deserialize
-    public static InitWorldMessage read(DataInputStream in) throws IOException {
-        InitWorldMessage input = new InitWorldMessage();
-        input.level = in.readInt();
-        return input;
+    public InitWorldMessage(ArrayList<Wall> walls, ArrayList<Vector2> spawnPoints) {
+        this.walls = walls;
+        this.spawnPoints = spawnPoints;
     }
 }
