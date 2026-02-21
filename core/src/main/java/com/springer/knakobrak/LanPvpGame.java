@@ -7,10 +7,9 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
-import com.springer.knakobrak.net.messages.DisconnectMessage;
 import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.screens.MainMenuScreen;
-import com.springer.knakobrak.world.client.PlayerState;
+import com.springer.knakobrak.world.PlayerState;
 
 
 public class LanPvpGame extends Game {

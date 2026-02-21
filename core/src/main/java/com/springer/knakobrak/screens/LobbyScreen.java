@@ -14,7 +14,6 @@ import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.dto.PlayerStateDTO;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.world.PhysicsSimulation;
-import com.springer.knakobrak.world.client.PlayerState;
 
 public class LobbyScreen implements Screen {
 
@@ -27,7 +26,6 @@ public class LobbyScreen implements Screen {
     private List<String> playerListUI;
     private ScrollPane playerScrollPane;
     private Table rootTable;
-
 
     private PhysicsSimulation simulation;
 

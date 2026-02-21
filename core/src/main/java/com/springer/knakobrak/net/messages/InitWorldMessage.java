@@ -2,7 +2,6 @@ package com.springer.knakobrak.net.messages;
 
 import com.badlogic.gdx.math.Vector2;
 import com.springer.knakobrak.dto.WallDTO;
-import com.springer.knakobrak.world.client.Wall;
 
 import java.util.ArrayList;
 

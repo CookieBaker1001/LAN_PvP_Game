@@ -81,7 +81,7 @@ public class GameClient implements Runnable {
     public void poll(Consumer<NetMessage> handler) {
         NetMessage msg;
         while ((msg = incoming.poll()) != null) {
-            System.out.println("Received message!");
+            //System.out.println("Received message!");
             handler.accept(msg);
         }
     }

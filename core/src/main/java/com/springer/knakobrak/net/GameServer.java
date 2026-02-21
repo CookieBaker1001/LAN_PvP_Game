@@ -8,12 +8,8 @@ import com.springer.knakobrak.dto.ProjectileStateDTO;
 import com.springer.knakobrak.dto.WallDTO;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.LoadUtillities;
-import com.springer.knakobrak.world.PhysicsSimulation;
-import com.springer.knakobrak.world.client.PlayerState;
-import com.springer.knakobrak.world.client.ProjectileState;
-import com.springer.knakobrak.world.client.Wall;
+import com.springer.knakobrak.world.*;
 import com.badlogic.gdx.physics.box2d.*;
-import com.springer.knakobrak.world.server.ServerMessage;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -39,37 +35,16 @@ public class GameServer implements Runnable {
     private static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(1);
 
-    public int getNextId() {
-        return nextId.getAndIncrement();
-    }
-
-    public boolean isRoomEmpty() {
-        return clients.isEmpty();
-    }
-
-    public void setHost(ClientHandler handler) {
-        host = handler;
-    }
-
-    public void addClient(int id, ClientHandler handler) {
-        clients.put(id, handler);
-        try {
-            simulation.players.put(id, handler.playerState);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     private PhysicsSimulation simulation;
     private int nextProjectileId = 1;
 
-    static int worldHeight = 0;
-    static int worldWidth = 0;
+    private float serverTime;
 
     public GameServer(int port) throws IOException {
         this.port = port;
         this.serverSocket = new ServerSocket(port);
-        simulation = new PhysicsSimulation();
+        this.simulation = new PhysicsSimulation();
+        this.serverTime = 0f;
     }
 
     enum ServerState {
@@ -134,6 +109,7 @@ public class GameServer implements Runnable {
         spawnPlayers();
         //Thread.sleep(500);
         sendInitialDataToAllClients();
+        broadcast(new LoadingCompleteMessage());
     }
 
     private void handleJoin(ClientHandler sender, JoinMessage jm) {
@@ -187,7 +163,7 @@ public class GameServer implements Runnable {
     void processServerMessages() {
         ServerMessage sm;
         while ((sm = inbox.poll()) != null) {
-            System.out.println("Sender: " + sm);
+            //System.out.println("[GS]: Handling: " + sm);
             dispatchMessage(sm.sender, sm.message);
         }
     }
@@ -253,6 +229,7 @@ public class GameServer implements Runnable {
         }
     }
 
+    Set<Integer> readyClients = new HashSet<>();
     void handleReadyMessage(ClientHandler sender, ReadyMessage rm) {
         if (!rm.ready) {
             readyClients.remove(sender.id);
@@ -294,34 +271,26 @@ public class GameServer implements Runnable {
         jam.isHost = (client == host);
         client.send(jam);
         broadcastPlayerList();
-        //broadcastLobbyUpdate();
     }
 
     private void gameLoop() {
-        final long TICK_MS = 16; // ~60Hz
-        long last = System.nanoTime();
-        long now;
-        float delta;
-        float dt = 1f / 60f;
+        //long last = System.nanoTime();
 
-        int counter = 0;
         while (serverState != ServerState.SHUTDOWN) {
-            now = System.nanoTime();
-            delta = (now - last) / 1_000_000_000f;
-            last = now;
+
+            final long TICK_MS = 16; // ~60Hz
+//            long now = System.nanoTime();
+//            float delta = (now-last) / 1_000_000_000f;
+//            last = now;
+
+            float dt = 1f / 60f;
 
             processServerMessages();
-
             if (serverState == ServerState.GAME) {
-                //System.out.println("Tick (" + (counter++) + ")");
-                //processGameInputs();
-                //updateProjectiles(delta);
-
                 simulation.step(dt, 6, 2);
-
                 syncBodiesToGameState();
                 broadcastGameState();
-
+                serverTime += dt;
             }
             try {
                 Thread.sleep(TICK_MS); // ~60 Hz
@@ -332,7 +301,6 @@ public class GameServer implements Runnable {
     private void syncBodiesToGameState() {
         for (PlayerState p : simulation.players.values()) {
             if (p.body == null) continue;
-
             Vector2 pos = p.body.getPosition();
             p.x = pos.x;
             p.y = pos.y;
@@ -340,7 +308,6 @@ public class GameServer implements Runnable {
 
         for (ProjectileState proj : simulation.projectiles.values()) {
             if (proj.body == null) continue;
-
             Vector2 pos = proj.body.getPosition();
             proj.x = pos.x;
             proj.y = pos.y;
@@ -348,8 +315,6 @@ public class GameServer implements Runnable {
     }
 
     private void loadData() {
-//        simulation.clearWalls();
-//        simulation.clearPlayerSpawnPoints();
         try {
             int[][] grid = LoadUtillities.loadLevel("levels/level1.txt");
             System.out.println();
@@ -366,7 +331,6 @@ public class GameServer implements Runnable {
             System.out.println("Error loading level: " + e.getMessage());
             e.printStackTrace();
             serverState = ServerState.LOBBY;
-            //return;
         }
     }
 
@@ -376,7 +340,6 @@ public class GameServer implements Runnable {
         }
     }
 
-    Set<Integer> readyClients = new HashSet<>();
     private void startGame() {
         serverState = ServerState.GAME;
         broadcast(new StartSimulationMessage());
@@ -390,85 +353,59 @@ public class GameServer implements Runnable {
     }
 
     void sendInitialData(ClientHandler c) {
-
-        // Tell client which player it owns
-        //c.send("WELCOME " + c.id);
-
-        // Send player list
         for (PlayerState p : simulation.players.values()) {
             InitPlayerMessage ipm = new InitPlayerMessage();
             ipm.player = PlayerStateDTO.toDTO(p);
             c.send(ipm);
             //c.send("INIT_PLAYER " + p.id + " " + p.x + " " + p.y);
         }
-
-        // Send wall map
         sendWallLayout(c);
-
-        //c.send("INIT_DONE");
-
-        c.send(new StartSimulationMessage());
     }
 
     void sendWallLayout(ClientHandler c) {
-
-//        int mapWidth = (int) (worldWidth * PIXELS_PER_METER);
-//        int mapHeight = (int) (worldHeight * PIXELS_PER_METER);
-//
-//        c.send("INIT_MAP " + mapWidth + " " + mapHeight);
-
         InitWorldMessage iwm = new InitWorldMessage();
-
         iwm.walls = WallDTO.toDTO(simulation.walls);
         iwm.spawnPoints = simulation.playerSpawnPoints;
-
         c.send(iwm);
     }
 
     private void broadcast(NetMessage msg) {
         clients.values().forEach(c -> c.send(msg));
-
-//        if (msg instanceof JoinMessage) {
-//            clients.values().forEach(c -> c.send(msg));
-//        } else if () {
-//            clients.values().forEach(c -> c.send(msg));
-//        } else if (msg instanceof EnterLoadingMessage) {
-//            clients.values().forEach(c -> c.send(msg));
-//        }
     }
-
-//    private void broadcastWalls() {
-//        StringBuilder sb = new StringBuilder("GAME_START");
-//        for (Wall w : simulation.walls) {
-//            sb.append(" ").append(w.x)
-//                .append(" ").append(w.y)
-//                .append(" ").append(w.width)
-//                .append(" ").append(w.height);
-//        }
-//        broadcast(sb.toString());
-//    }
 
     private void broadcastGameState() {
         WorldSnapshotMessage wsm = new WorldSnapshotMessage();
         wsm.players = new ArrayList<>();
 
         for (ClientHandler c : clients.values()) {
-            PlayerStateDTO p = PlayerStateDTO.toDTO(c.playerState);
+//            PlayerStateDTO p = PlayerStateDTO.toDTO(c.playerState);
 //            PlayerStateDTO p = new PlayerStateDTO();
 //            p.id = c.id;
 //            p.x = c.playerState.x;
 //            p.y = c.playerState.y;
+//            wsm.players.add(p);
+            PlayerSnapshot p = new PlayerSnapshot();
+            p.id = c.id;
+            p.x = c.playerState.x;
+            p.y = c.playerState.y;
+            p.time = serverTime;
             wsm.players.add(p);
         }
         wsm.projectiles = new ArrayList<>();
         for (ProjectileState p : simulation.projectiles.values()) {
-            ProjectileStateDTO p2 = ProjectileStateDTO.toDTO(p);
+            //ProjectileStateDTO p2 = ProjectileStateDTO.toDTO(p);
+            ProjectileSnapshot p2 = new ProjectileSnapshot();
+            p2.id = p.id;
+            p2.ownerId = p.ownerId;
+            p2.x = p.x;
+            p2.y = p.y;
 //            ProjectileStateDTO p2 = new ProjectileStateDTO();
 //            p2.id = p.id;
 //            p2.x = p.x;
 //            p2.y = p.y;
             wsm.projectiles.add(p2);
         }
+        wsm.serverTime = this.serverTime;
         broadcast(wsm);
     }
 

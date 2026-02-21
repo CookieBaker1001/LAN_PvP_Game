@@ -6,8 +6,8 @@ import com.esotericsoftware.kryo.io.Output;
 import com.springer.knakobrak.net.messages.DisconnectMessage;
 import com.springer.knakobrak.net.messages.NetMessage;
 import com.springer.knakobrak.serialization.NetworkRegistry;
-import com.springer.knakobrak.world.client.PlayerState;
-import com.springer.knakobrak.world.server.ServerMessage;
+import com.springer.knakobrak.world.PlayerState;
+import com.springer.knakobrak.world.ServerMessage;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -73,17 +73,23 @@ public class ClientHandler implements Runnable {
     private void readLoop() throws IOException {
         NetMessage msg;
         while (!socket.isClosed()) {
-            System.out.println("Found something!");
             msg = (NetMessage) kryo.readClassAndObject(in);
+            //System.out.println("[CH]: Forwarding " + msg.getClass() + " to the server");
             server.enqueue(new ServerMessage(this, msg));
         }
     }
 
     public synchronized void send(NetMessage msg) {
         //System.out.println("Sending message to client!");
-        System.out.println("Sending a " + msg.getClass() + " type package");
-        kryo.writeClassAndObject(out, msg);
-        out.flush();
+        //System.out.println("Sending a " + msg.getClass() + " type package");
+        try {
+            kryo.writeClassAndObject(out, msg);
+            out.flush();
+        } catch (Exception e) {
+            System.err.println("Failed to send message: " + msg.getClass().getSimpleName());
+            e.printStackTrace();
+            disconnect();
+        }
     }
 
     public void disconnect() {

@@ -1,7 +1,7 @@
 package com.springer.knakobrak.dto;
 
 import com.badlogic.gdx.graphics.Color;
-import com.springer.knakobrak.world.client.PlayerState;
+import com.springer.knakobrak.world.PlayerState;
 
 public class PlayerStateDTO {
     public int id;

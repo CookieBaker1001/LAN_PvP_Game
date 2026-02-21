@@ -1,4 +1,4 @@
-package com.springer.knakobrak.world.client;
+package com.springer.knakobrak.world;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.physics.box2d.Body;

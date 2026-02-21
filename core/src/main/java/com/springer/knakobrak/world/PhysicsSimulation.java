@@ -2,10 +2,6 @@ package com.springer.knakobrak.world;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
-import com.badlogic.gdx.utils.Array;
-import com.springer.knakobrak.world.client.PlayerState;
-import com.springer.knakobrak.world.client.ProjectileState;
-import com.springer.knakobrak.world.client.Wall;
 
 import java.util.ArrayList;
 import java.util.HashMap;

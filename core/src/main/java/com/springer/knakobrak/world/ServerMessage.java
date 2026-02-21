@@ -1,4 +1,4 @@
-package com.springer.knakobrak.world.server;
+package com.springer.knakobrak.world;
 
 import com.springer.knakobrak.net.ClientHandler;
 import com.springer.knakobrak.net.messages.NetMessage;

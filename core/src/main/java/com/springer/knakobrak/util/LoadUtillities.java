@@ -2,12 +2,11 @@ package com.springer.knakobrak.util;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
-import com.springer.knakobrak.world.client.Wall;
+import com.springer.knakobrak.world.Wall;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 

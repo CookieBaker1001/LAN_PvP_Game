@@ -1,7 +1,6 @@
 package com.springer.knakobrak.dto;
 
-import com.springer.knakobrak.world.client.ProjectileState;
-import com.springer.knakobrak.world.client.Wall;
+import com.springer.knakobrak.world.Wall;
 
 import java.util.ArrayList;
 

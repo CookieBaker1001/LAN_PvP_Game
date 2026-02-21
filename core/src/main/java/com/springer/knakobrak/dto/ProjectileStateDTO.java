@@ -1,6 +1,6 @@
 package com.springer.knakobrak.dto;
 
-import com.springer.knakobrak.world.client.ProjectileState;
+import com.springer.knakobrak.world.ProjectileState;
 
 public class ProjectileStateDTO {
     public int id;
