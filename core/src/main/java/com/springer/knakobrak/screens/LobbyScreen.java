@@ -150,12 +150,11 @@ public class LobbyScreen implements Screen {
     }
 
     private void handleMessage(NetMessage msg) {
-        System.out.println("Message received!");
         if (msg instanceof JoinAcceptMessage) {
             game.playerId = ((JoinAcceptMessage) msg).clientId;
             System.out.println("Assigned ID: " + game.playerId);
         } else if (msg instanceof LobbyStateMessage) {
-            LobbyStateMessage lobbyMsg = (LobbyStateMessage)msg;
+            LobbyStateMessage lobbyMsg = (LobbyStateMessage) msg;
             updatePlayerList(lobbyMsg);
         } else if (msg instanceof EnterLoadingMessage) {
             simulation.initPhysics();
@@ -165,57 +164,9 @@ public class LobbyScreen implements Screen {
             game.cleanupNetworking();
             game.setScreen(new MainMenuScreen(game));
         }
-
-//        if (msg.startsWith("ASSIGNED_ID")) {
-//            String[] data = msg.split(" ");
-//            game.playerId = Integer.parseInt(data[1]);
-//            //game.gameState.localPlayerId = Integer.parseInt(data[1]);
-//            //game.playerColor = new Color(Float.parseFloat(data[2]), Float.parseFloat(data[3]), Float.parseFloat(data[4]), 1);
-//            //System.out.println("Assigned ID: " + game.gameState.localPlayerId);
-//            System.out.println("Assigned ID: " + game.playerId);
-//        } else if (msg.startsWith("PLAYER_LIST")) {
-//            updatePlayerList(msg);
-//        }
-////        else if (msg.startsWith("WALLS")) {
-////            receiveWalls(msg);
-////        }
-////        else if (msg.equals("GAME_START")) {
-////            game.setScreen(new GameScreen(game));
-////        }
-//        else if (msg.equals("ENTER_LOADING")) {
-//            simulation.initPhysics();
-//            game.setScreen(new LoadingScreen(game));
-//        }
-//        else if (msg.startsWith("GAME_START")) {
-//            //receiveWalls(msg);
-//            game.setScreen(new GameScreen(game));
-//        } else if (msg.equals("HOST_LEFT")) {
-//            game.cleanupNetworking();
-//            game.setScreen(new MainMenuScreen(game));
-//        }
     }
 
-//    private void receiveWalls(String msg) {
-//        String[] parts = msg.split(" ");
-//        System.out.println("Received walls: " + msg);
-//        game.gameState.walls.clear();
-//        for (int i = 1; i < parts.length; i += 4) {
-//            float x = Constants.metersToPx(Float.parseFloat(parts[i]));
-//            float y = Constants.metersToPx(Float.parseFloat(parts[i + 1]));
-//            float width = Constants.metersToPx(Float.parseFloat(parts[i + 2]));
-//            float height = Constants.metersToPx(Float.parseFloat(parts[i + 3]));
-//            Wall wall = new Wall();
-//            wall.x = x;
-//            wall.y = y;
-//            wall.width = width;
-//            wall.height = height;
-//            game.gameState.walls.add(wall);
-//            System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
-//        }
-//    }
-
     private void updatePlayerList(LobbyStateMessage msg) {
-        System.out.println("Updating lobby list!");
         Array<String> names = new Array<>();
         for (PlayerStateDTO p : msg.players) {
             String entry = "";
@@ -224,24 +175,6 @@ public class LobbyScreen implements Screen {
             if (p.id == msg.hostId) entry += " (HOST)";
             names.add(entry);
         }
-        System.out.println("Updated player list: " + names);
         playerListUI.setItems(names);
     }
-
-//    private void updatePlayerList(String msg) {
-//        // Update player list UI
-//        //System.out.println("Received player list: " + msg);
-//        String[] parts = msg.split("_");
-//        Array<String> names = new Array<>();
-//        for (int i = 1; i < parts.length; i++) {
-//            String entry = parts[i]; // "1:Alice"
-//            String[] pair = entry.split(":");
-//            if (pair.length == 2) {
-//                String name = pair[1];
-//                names.add(name);
-//            }
-//        }
-//        System.out.println("Updated player list: " + names);
-//        playerListUI.setItems(names);
-//    }
 }

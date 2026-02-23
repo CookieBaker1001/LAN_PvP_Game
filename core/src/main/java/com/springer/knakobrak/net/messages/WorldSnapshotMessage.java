@@ -1,7 +1,5 @@
 package com.springer.knakobrak.net.messages;
 
-import com.springer.knakobrak.dto.PlayerStateDTO;
-import com.springer.knakobrak.dto.ProjectileStateDTO;
 import com.springer.knakobrak.world.PlayerSnapshot;
 import com.springer.knakobrak.world.ProjectileSnapshot;
 

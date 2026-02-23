@@ -52,6 +52,7 @@ public class GameScreen implements Screen {
 
     int nextInputId = 0;
     Queue<PlayerInputMessage> pendingInputs = new ArrayDeque<>();
+    volatile PlayerInputMessage latestInput;
 
     Deque<WorldSnapshotMessage> snapshotBuffer = new ArrayDeque<>();
     static final float INTERPOLATION_DELAY = 0.1f; // 100 ms
@@ -114,8 +115,25 @@ public class GameScreen implements Screen {
 
     float physicsAccumulator = 0f;
     float FIXED_DT = 1 / 60f;
+
+    int secondsCounter = 0;
+    float secondsAccumulator = 0f;
+
     @Override
     public void render(float delta) {
+
+        secondsAccumulator += delta;
+        if (secondsAccumulator > 1f) {
+            //System.out.println("Time: " + ++secondsCounter);
+            secondsAccumulator -= 1f;
+        }
+        System.out.println(localTime);
+
+        if (localPlayer == null) {
+            System.out.println("Null-player reference!");
+            localPlayer = game.localPlayer;
+            return;
+        }
         game.client.poll(this::handleMessage); // Check for incoming data to be put into the queue
         localTime += delta; // age localtime
         input(delta); // detect local input, move, and tell the server
@@ -180,8 +198,12 @@ public class GameScreen implements Screen {
         stage.unfocusAll();
     }
 
+    private float inputAccumulator = 0f;
+
+    private float intentDx = 0, intentDy = 0;
     private void input(float delta) {
 
+        inputAccumulator += delta;
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
             chatMode = !chatMode;
             if (chatMode) {
@@ -192,27 +214,29 @@ public class GameScreen implements Screen {
             }
         }
 
-        float dx = 0, dy = 0;
-
+        intentDx = 0;
+        intentDy = 0;
         if (!chatMode) {
-            if (Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.W)) intentDy += 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.S)) intentDy -= 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.A)) intentDx -= 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.D)) intentDx += 1;
         }
 
-        PlayerInputMessage pim = new PlayerInputMessage();
-        pim.playerId = localPlayer.id;
-        pim.sequence = nextInputId++;
-        pim.dx = dx;
-        pim.dy = dy;
-        //input.dt = delta;
+        if (inputAccumulator >= FIXED_DT) {
+            inputAccumulator -= FIXED_DT;
 
-        pendingInputs.add(pim);
+            PlayerInputMessage pim = new PlayerInputMessage();
+            pim.playerId = localPlayer.id;
+            pim.sequence = nextInputId++;
+            pim.dx = intentDx;
+            pim.dy = intentDy;
 
-        applyMovement(pim);
+            latestInput = pim;
+            game.client.send(latestInput);
 
-        game.client.send(pim);
+            applyMovement(pim);
+        }
 
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             Vector3 mouse = new Vector3(
@@ -319,8 +343,6 @@ public class GameScreen implements Screen {
 
             ps.x = MathUtils.lerp(p0.x, p1.x, t);
             ps.y = MathUtils.lerp(p0.y, p1.y, t);
-
-            System.out.println(localTime);
         }
     }
 

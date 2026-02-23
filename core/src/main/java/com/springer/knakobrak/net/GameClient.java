@@ -4,29 +4,28 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.springer.knakobrak.net.messages.DisconnectMessage;
+import com.springer.knakobrak.net.messages.JoinMessage;
 import com.springer.knakobrak.net.messages.NetMessage;
 import com.springer.knakobrak.serialization.NetworkRegistry;
-
 import java.io.*;
 import java.net.Socket;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
 
 public class GameClient implements Runnable {
 
-    private Socket socket;
-    private Kryo kryo;
+    private final Socket socket;
+    private final Kryo kryo;
 
-//    private InputStream is;
-//    private OutputStream os;
+    private final Input in;
+    private final Output out;
 
-    private Input in;
-    private Output out;
+    private final Queue<NetMessage> incoming;
+    //private final BlockingQueue<NetMessage> outgoing;
 
-    private final Queue<NetMessage> incoming = new ConcurrentLinkedQueue<>();
-
-    //private Thread thread;
     private volatile boolean connected;
 
     String host;
@@ -35,21 +34,14 @@ public class GameClient implements Runnable {
     public GameClient(String host, int port) throws IOException {
         this.host = host;
         this.port = port;
-
         socket = new Socket(host, port);
-
         kryo = new Kryo();
         NetworkRegistry.register(kryo);
-
-//        is = socket.getInputStream();
-//        os = socket.getOutputStream();
-//
-//        in = new Input(is);
-//        out = new Output(os);
-
+        kryo.setReferences(false);
         in = new Input(socket.getInputStream());
         out = new Output(socket.getOutputStream());
-
+        incoming = new ConcurrentLinkedQueue<>();
+        //outgoing = new LinkedBlockingQueue<>();
         connected = true;
     }
 
@@ -68,33 +60,29 @@ public class GameClient implements Runnable {
         NetMessage msg;
         while (connected) {
             msg = (NetMessage) kryo.readClassAndObject(in);
-            //msg = kryo.readObject(in, NetMessage.class);
-            incoming.add(msg);
+            System.out.println("C: RECV <- " + msg.getClass().getSimpleName());
+            incoming.offer(msg);
         }
     }
 
-    public synchronized void send(NetMessage msg) {
-        kryo.writeClassAndObject(out, msg);
-        out.flush();
+    // Used by Client classes to send messages
+    public void send(NetMessage msg) {
+        System.out.println("C: SEND -> " + msg.getClass().getSimpleName());
+        synchronized (out) {
+            kryo.writeClassAndObject(out, msg);
+            out.flush();
+        }
     }
 
+    // Used by Client classes to receive messages
     public void poll(Consumer<NetMessage> handler) {
         NetMessage msg;
         while ((msg = incoming.poll()) != null) {
             //System.out.println("Received message!");
+            System.out.println("Polling: " + msg.getClass().getSimpleName());
             handler.accept(msg);
         }
     }
-
-//    public void send(String msg) {
-//        if (connected) out.println(msg);
-//    }
-
-//    public void poll(Consumer<String> handler) {
-//        while (!incoming.isEmpty()) {
-//            handler.accept(incoming.poll());
-//        }
-//    }
 
     public void disconnect() {
         connected = false;

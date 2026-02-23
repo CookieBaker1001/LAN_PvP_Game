@@ -14,7 +14,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class ClientHandler implements Runnable {
 
@@ -33,8 +35,9 @@ public class ClientHandler implements Runnable {
     private final Output out;
 
     public boolean isHost;
+    private volatile boolean connected;
 
-    private final Queue<NetMessage> incoming;
+    //private final BlockingQueue<NetMessage> outgoing;
     public PlayerState playerState;
 
     public int lastProcessedInput = 0;
@@ -45,6 +48,7 @@ public class ClientHandler implements Runnable {
 
         kryo = new Kryo();
         NetworkRegistry.register(kryo);
+        kryo.setReferences(false);
 
         os = socket.getOutputStream();
         is = socket.getInputStream();
@@ -52,7 +56,9 @@ public class ClientHandler implements Runnable {
         in = new Input(socket.getInputStream());
         out = new Output(socket.getOutputStream());
 
-        incoming = new ConcurrentLinkedQueue<>();
+        //outgoing = new LinkedBlockingQueue<>();
+
+        connected = true;
     }
 
     @Override
@@ -60,58 +66,37 @@ public class ClientHandler implements Runnable {
         try {
             readLoop();
         } catch (IOException e) {
+            System.err.println("CLIENT HANDLER CRASHED: " + id);
             e.printStackTrace();
-            DisconnectMessage dcm = new DisconnectMessage();
-            dcm.playerId = this.id;
-            dcm.reason = "Connection lost";
-            server.enqueue(new ServerMessage(this, dcm));
         } finally {
+            System.err.println("CLIENT HANDLER DISCONNECTING: " + id);
             disconnect();
         }
     }
 
     private void readLoop() throws IOException {
         NetMessage msg;
-        while (!socket.isClosed()) {
+        while (connected) {
             msg = (NetMessage) kryo.readClassAndObject(in);
-            //System.out.println("[CH]: Forwarding " + msg.getClass() + " to the server");
+            System.out.println("CH"+id+": RECV <- " + msg.getClass().getSimpleName());
             server.enqueue(new ServerMessage(this, msg));
         }
     }
 
-    public synchronized void send(NetMessage msg) {
-        //System.out.println("Sending message to client!");
-        //System.out.println("Sending a " + msg.getClass() + " type package");
-        try {
+    public void send(NetMessage msg) {
+        System.out.println("CH"+id+": SEND -> " + msg.getClass().getSimpleName());
+        synchronized (out) {
             kryo.writeClassAndObject(out, msg);
             out.flush();
-        } catch (Exception e) {
-            System.err.println("Failed to send message: " + msg.getClass().getSimpleName());
-            e.printStackTrace();
-            disconnect();
         }
     }
 
     public void disconnect() {
         System.out.println("Disconnecting!");
-        DisconnectMessage dm = new DisconnectMessage();
-        dm.playerId = id;
-        dm.reason = "Not specified";
-        send(dm);
-//        clients.remove(id);
-//        simulation.removePlayer(id);
-        //simulation.players.remove(id);
-//        if (this == host) {
-//            DisconnectMessage dm = new DisconnectMessage();
-//            dm.playerId = id;
-//            dm.reason = "Not specified";
-//            broadcast(dm);
-//            serverState = GameServer.ServerState.SHUTDOWN;
-//            shutdown();
-//        }
-//        else {
-//            broadcastPlayerList();
-//        }
+        DisconnectMessage dcm = new DisconnectMessage();
+        dcm.playerId = id;
+        dcm.reason = "Not specified";
+        server.enqueue(new ServerMessage(this, dcm));
         try {
             socket.close();
             socket = null;

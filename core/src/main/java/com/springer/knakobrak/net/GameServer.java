@@ -4,7 +4,6 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.springer.knakobrak.dto.PlayerStateDTO;
-import com.springer.knakobrak.dto.ProjectileStateDTO;
 import com.springer.knakobrak.dto.WallDTO;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.LoadUtillities;
@@ -62,19 +61,12 @@ public class GameServer implements Runnable {
             System.out.println("Game server started on port " + port);
             sevrerThread = new Thread(this::gameLoop, "Game loop");
             sevrerThread.start();
-
             while (running) {
                 Socket socket = serverSocket.accept();
                 ClientHandler client = new ClientHandler(this, socket);
-
                 Thread clientThread = new Thread(client);
                 clientThread.start();
-
                 System.out.println("New client connected!");
-//                if (host == null) {
-//                    host = client;
-//                    System.out.println("Host connected.");
-//                } else System.out.println("New client connected");
             }
         } catch (IOException e) {
             if (running) {
@@ -88,14 +80,11 @@ public class GameServer implements Runnable {
 
     void handleLobbyMessage(ClientHandler sender, NetMessage msg) {
         if (msg instanceof StartGameMessage && sender == host) {
-            System.out.println("Start game");
             transitionToLoading();
         } else if (msg instanceof JoinMessage) {
-            System.out.println("Join game");
             JoinMessage jm = (JoinMessage) msg;
             handleJoin(sender, jm);
         } else if (msg instanceof DisconnectMessage) {
-            System.out.println("Disconnecting from game");
             DisconnectMessage dcm = (DisconnectMessage) msg;
             removeClient(sender, dcm);
         }
@@ -107,38 +96,30 @@ public class GameServer implements Runnable {
         simulation.initPhysics();
         loadData();
         spawnPlayers();
-        //Thread.sleep(500);
         sendInitialDataToAllClients();
         broadcast(new LoadingCompleteMessage());
     }
 
     private void handleJoin(ClientHandler sender, JoinMessage jm) {
         System.out.println(jm.playerName + " (v." + jm.protocolVersion + ") just joined!");
-
         int id = nextId.getAndIncrement();
-
         sender.id = id;
         sender.name = jm.playerName;
         sender.isHost = clients.isEmpty();
         if (clients.isEmpty()) {
             host = sender;
         }
-
         PlayerState ps = new PlayerState();
         ps.id = id;
         ps.name = jm.playerName;
         ps.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
-
         simulation.players.put(id, ps);
         sender.playerState = ps;
         clients.put(id, sender);
-
         JoinAcceptMessage accept = new JoinAcceptMessage();
         accept.clientId = id;
         accept.isHost = sender.isHost;
-
         sender.send(accept);
-
         broadcastPlayerList();
     }
 
@@ -147,7 +128,9 @@ public class GameServer implements Runnable {
         lsm.hostId = host.id;
         lsm.players = new ArrayList<>();
         for (ClientHandler c : clients.values()) {
-            PlayerStateDTO p = PlayerStateDTO.toDTO(c.playerState);
+            PlayerStateDTO p = new PlayerStateDTO();
+            p.name = c.playerState.name;
+            p.id = c.playerState.id;
             lsm.players.add(p);
         }
         System.out.println("Broadcasting players!");
@@ -157,13 +140,13 @@ public class GameServer implements Runnable {
     private void removeClient(ClientHandler sender, DisconnectMessage dcm) {
         System.out.println("Player " + dcm.playerId + " left. Reason: " + dcm.reason);
         sender.disconnect();
+        broadcastPlayerList();
     }
 
-    // Runs from the gameloop
+    // Runs from the game loop
     void processServerMessages() {
         ServerMessage sm;
         while ((sm = inbox.poll()) != null) {
-            //System.out.println("[GS]: Handling: " + sm);
             dispatchMessage(sm.sender, sm.message);
         }
     }
@@ -242,49 +225,13 @@ public class GameServer implements Runnable {
     }
 
     public void enqueue(ServerMessage sm) {
-        //inbox.offer(sm);
-        //System.out.println("Received something!");
         inbox.add(sm);
     }
 
-    public synchronized void handleJoinRequest(ClientHandler client, JoinMessage msg) {
-        if (serverState != ServerState.LOBBY) {
-            JoinRejectedMessage jrm = new JoinRejectedMessage();
-            jrm.reason = "Game already started";
-            client.send(jrm);
-            client.disconnect();
-            return;
-        }
-//        if (nameTaken(msg.playerName)) {
-//            client.send(new JoinRejectedMessage("Name already in use"));
-//            client.disconnect();
-//            return;
-//        }
-        // Accept
-        client.name = msg.playerName;
-        clients.put(client.id, client);
-        if (host == null) {
-            host = client;
-        }
-        JoinAcceptMessage jam = new JoinAcceptMessage();
-        jam.clientId = client.id;
-        jam.isHost = (client == host);
-        client.send(jam);
-        broadcastPlayerList();
-    }
-
     private void gameLoop() {
-        //long last = System.nanoTime();
-
         while (serverState != ServerState.SHUTDOWN) {
-
             final long TICK_MS = 16; // ~60Hz
-//            long now = System.nanoTime();
-//            float delta = (now-last) / 1_000_000_000f;
-//            last = now;
-
             float dt = 1f / 60f;
-
             processServerMessages();
             if (serverState == ServerState.GAME) {
                 simulation.step(dt, 6, 2);
@@ -318,19 +265,23 @@ public class GameServer implements Runnable {
         try {
             int[][] grid = LoadUtillities.loadLevel("levels/level1.txt");
             System.out.println();
-            for (int i = 0; i < grid.length; i++) {
-                for (int j = 0; j < grid[0].length; j++) {
-                    System.out.print(grid[i][j]);
-                }
-                System.out.println();
-            }
+            //printWallGrid(grid);
             simulation.walls = LoadUtillities.generateWallsFromGrid(simulation.world, grid);
-            printWalls(simulation.walls);
+            //printWalls(simulation.walls);
             simulation.playerSpawnPoints = LoadUtillities.getPlayerSpawnPoints(grid);
         } catch (IOException e) {
             System.out.println("Error loading level: " + e.getMessage());
             e.printStackTrace();
             serverState = ServerState.LOBBY;
+        }
+    }
+
+    private void printWallGrid(int[][] grid) {
+        for (int i = 0; i < grid.length; i++) {
+            for (int j = 0; j < grid[0].length; j++) {
+                System.out.print(grid[i][j]);
+            }
+            System.out.println();
         }
     }
 
@@ -347,43 +298,54 @@ public class GameServer implements Runnable {
     }
 
     private void sendInitialDataToAllClients() {
-        for (ClientHandler c : clients.values()) {
-            sendInitialData(c);
-        }
-    }
-
-    void sendInitialData(ClientHandler c) {
+        InitPlayersMessage ipm = new InitPlayersMessage();
+        ArrayList<PlayerStateDTO> playersDTO = new ArrayList<>();
         for (PlayerState p : simulation.players.values()) {
-            InitPlayerMessage ipm = new InitPlayerMessage();
-            ipm.player = PlayerStateDTO.toDTO(p);
-            c.send(ipm);
-            //c.send("INIT_PLAYER " + p.id + " " + p.x + " " + p.y);
+            PlayerStateDTO pDTO = new PlayerStateDTO();
+            pDTO.name = p.name;
+            pDTO.id = p.id;
+            pDTO.x = p.x;
+            pDTO.y = p.y;
+            pDTO.r = p.color.r;
+            pDTO.g = p.color.g;
+            pDTO.b = p.color.b;
+            playersDTO.add(pDTO);
         }
-        sendWallLayout(c);
-    }
-
-    void sendWallLayout(ClientHandler c) {
+        ipm.players = playersDTO;
         InitWorldMessage iwm = new InitWorldMessage();
-        iwm.walls = WallDTO.toDTO(simulation.walls);
+        ArrayList<WallDTO> walls = new ArrayList<>();
+        for (Wall w : simulation.walls) {
+            WallDTO wDTO = new WallDTO();
+            wDTO.x = w.x;
+            wDTO.y = w.y;
+            wDTO.width = w.width;
+            wDTO.height = w.height;
+            walls.add(wDTO);
+        }
+        iwm.walls = walls;
         iwm.spawnPoints = simulation.playerSpawnPoints;
-        c.send(iwm);
+        for (ClientHandler c : clients.values()) {
+            c.send(ipm);
+            c.send(iwm);
+        }
     }
 
     private void broadcast(NetMessage msg) {
-        clients.values().forEach(c -> c.send(msg));
+        clients.values().forEach(c -> {
+            try {
+                c.send(msg);
+            } catch (Exception e) {
+                System.err.println("FAILED TO SEND TO CLIENT " + c.id);
+                e.printStackTrace();
+                c.disconnect();
+            }
+        });
     }
 
     private void broadcastGameState() {
         WorldSnapshotMessage wsm = new WorldSnapshotMessage();
         wsm.players = new ArrayList<>();
-
         for (ClientHandler c : clients.values()) {
-//            PlayerStateDTO p = PlayerStateDTO.toDTO(c.playerState);
-//            PlayerStateDTO p = new PlayerStateDTO();
-//            p.id = c.id;
-//            p.x = c.playerState.x;
-//            p.y = c.playerState.y;
-//            wsm.players.add(p);
             PlayerSnapshot p = new PlayerSnapshot();
             p.id = c.id;
             p.x = c.playerState.x;
@@ -393,16 +355,11 @@ public class GameServer implements Runnable {
         }
         wsm.projectiles = new ArrayList<>();
         for (ProjectileState p : simulation.projectiles.values()) {
-            //ProjectileStateDTO p2 = ProjectileStateDTO.toDTO(p);
             ProjectileSnapshot p2 = new ProjectileSnapshot();
             p2.id = p.id;
             p2.ownerId = p.ownerId;
             p2.x = p.x;
             p2.y = p.y;
-//            ProjectileStateDTO p2 = new ProjectileStateDTO();
-//            p2.id = p.id;
-//            p2.x = p.x;
-//            p2.y = p.y;
             wsm.projectiles.add(p2);
         }
         wsm.serverTime = this.serverTime;
@@ -412,7 +369,6 @@ public class GameServer implements Runnable {
     private void spawnPlayers() {
         int i = 0;
         for (ClientHandler c : clients.values()) {
-            //c.serverPlayerState = new ServerPlayerState();
             c.playerState.id = c.id;
             c.playerState.x = simulation.playerSpawnPoints.get(i).x + 0.5f;
             c.playerState.y = simulation.playerSpawnPoints.get(i).y + 0.5f;

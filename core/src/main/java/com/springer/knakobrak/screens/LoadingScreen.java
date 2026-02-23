@@ -2,6 +2,7 @@ package com.springer.knakobrak.screens;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.springer.knakobrak.LanPvpGame;
@@ -36,6 +37,7 @@ public class LoadingScreen implements Screen {
 
     }
 
+    private boolean sentReady = false;
     @Override
     public void render(float v) {
         Gdx.gl.glClearColor(0, 0, 0, 1);
@@ -56,6 +58,14 @@ public class LoadingScreen implements Screen {
 //        stage.act(delta);
 //        stage.draw();
 
+        System.out.println("LoadingScreen: " + playersDataReceived + ", " + worldDataReceived + ", " + (!gameStart) + ", " + (!sentReady));
+        if (playersDataReceived && worldDataReceived && !gameStart && !sentReady) {
+            ReadyMessage rm = new ReadyMessage();
+            rm.ready = true;
+            sentReady = true;
+            game.client.send(rm);
+        }
+
         if (initDone && gameStart) {
             game.localPlayer =
                 game.simulation.getPlayer(
@@ -67,18 +77,16 @@ public class LoadingScreen implements Screen {
 
     private void handleMessage(NetMessage msg) {
 
-        if (msg instanceof InitPlayerMessage) {
+        System.out.println("Received message: " + msg.getClass().getSimpleName());
+        if (msg instanceof InitPlayersMessage) {
             System.out.println("[C]: INIT_PLAYER");
-            receivePlayerData((InitPlayerMessage) msg);
+            receivePlayerData((InitPlayersMessage) msg);
         } else if (msg instanceof InitWorldMessage) {
             System.out.println("[C]: INIT_WORLD");
             receiveWorldData((InitWorldMessage) msg);
         } else if (msg instanceof LoadingCompleteMessage) {
             System.out.println("[C]: INIT_COMPLETE");
             initDone = true;
-            ReadyMessage rm = new ReadyMessage();
-            rm.ready = true;
-            game.client.send(rm);
         } else if (msg instanceof StartSimulationMessage) {
             System.out.println("[C]: START_SIMULATION");
             gameStart = true;
@@ -111,18 +119,27 @@ public class LoadingScreen implements Screen {
 //        }
     }
 
-    private void receivePlayerData(InitPlayerMessage msg) {
-        PlayerState p = PlayerStateDTO.fromDTO(msg.player);
-        p.id = msg.player.id;
-        p.body = LoadUtillities.createPlayerBody(game.simulation.world,  p.x, p.y, p.id);
-        game.simulation.players.put(p.id, p);
-//        if (id == game.playerId) {
-//            game.localPlayer = newPlayer;
-//        }
-        System.out.println("Added player with id " + p.id);
-        //gameState.players.put(id, newPlayer);
+    private boolean playersDataReceived = false;
+    private void receivePlayerData(InitPlayersMessage msg) {
+        for (PlayerStateDTO p : msg.players) {
+            PlayerState ps = new PlayerState();
+            ps.id = p.id;
+            ps.name = p.name;
+            ps.x = p.x;
+            ps.y = p.y;
+            ps.color = new Color(p.r, p.g, p.b, 1.0f);
+            ps.body = LoadUtillities.createPlayerBody(game.simulation.world,  p.x, p.y, p.id);
+            game.simulation.players.put(ps.id, ps);
+            if (ps.id == game.playerId){
+                game.localPlayer = ps;
+            }
+            System.out.println("Added player with id " + ps.id);
+        }
+        System.out.println("set to true!!!!");
+        playersDataReceived = true;
     }
 
+    private boolean worldDataReceived = false;
     private void receiveWorldData(InitWorldMessage msg) {
         game.simulation.clearWalls();
         game.simulation.playerSpawnPoints = msg.spawnPoints;
@@ -135,6 +152,7 @@ public class LoadingScreen implements Screen {
             w.body = LoadUtillities.createWall(game.simulation.world, w.x, w.y, (int)w.height, (int)w.width);
             game.simulation.addWall(w);
         }
+        worldDataReceived = true;
     }
 
     private void receiveWalls(String msg) {
