@@ -58,7 +58,7 @@ public class LoadingScreen implements Screen {
 //        stage.act(delta);
 //        stage.draw();
 
-        System.out.println("LoadingScreen: " + playersDataReceived + ", " + worldDataReceived + ", " + (!gameStart) + ", " + (!sentReady));
+        System.out.println("LS: " + playersDataReceived + ", " + worldDataReceived + ", " + (!gameStart) + ", " + (!sentReady));
         if (playersDataReceived && worldDataReceived && !gameStart && !sentReady) {
             ReadyMessage rm = new ReadyMessage();
             rm.ready = true;
@@ -135,7 +135,6 @@ public class LoadingScreen implements Screen {
             }
             System.out.println("Added player with id " + ps.id);
         }
-        System.out.println("set to true!!!!");
         playersDataReceived = true;
     }
 

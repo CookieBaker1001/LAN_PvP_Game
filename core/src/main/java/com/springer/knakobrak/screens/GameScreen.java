@@ -54,7 +54,9 @@ public class GameScreen implements Screen {
     Queue<PlayerInputMessage> pendingInputs = new ArrayDeque<>();
     volatile PlayerInputMessage latestInput;
 
-    Deque<WorldSnapshotMessage> snapshotBuffer = new ArrayDeque<>();
+    private WorldSnapshotMessage previousSnapshot;
+    private WorldSnapshotMessage latestSnapshot;
+
     static final float INTERPOLATION_DELAY = 0.1f; // 100 ms
 
     private float localTime;
@@ -124,7 +126,8 @@ public class GameScreen implements Screen {
 
         secondsAccumulator += delta;
         if (secondsAccumulator > 1f) {
-            //System.out.println("Time: " + ++secondsCounter);
+            ++secondsCounter;
+            //System.out.println("Time: " + secondsCounter);
             secondsAccumulator -= 1f;
         }
         System.out.println(localTime);
@@ -308,38 +311,21 @@ public class GameScreen implements Screen {
     }
 
     private void handleWorldSnapshotBuffer(float delta) {
+        if (latestSnapshot == null || previousSnapshot == null) return;
+
         float renderTime = localTime - INTERPOLATION_DELAY;
+        float t =
+            (renderTime - previousSnapshot.serverTime) /
+                (latestSnapshot .serverTime - previousSnapshot.serverTime);
+        t = MathUtils.clamp(t, 0f, 1f);
 
-        WorldSnapshotMessage older = null;
-        WorldSnapshotMessage newer = null;
-
-        for (WorldSnapshotMessage snap : snapshotBuffer) {
-            if (snap.serverTime <= renderTime) {
-                older = snap;
-            } else {
-                newer = snap;
-                break;
-            }
-        }
-        if (older == null || newer == null) return;
-
-        float alpha;
         for (PlayerState ps : simulation.players.values()) {
             if (ps == localPlayer) continue;
 
-            alpha =
-                (renderTime - older.serverTime) /
-                    (newer.serverTime - older.serverTime);
-
-            alpha = MathUtils.clamp(alpha, 0f, 1f);
-
-            PlayerSnapshot p0 = findPlayer(older, ps.id);
-            PlayerSnapshot p1 = findPlayer(newer, ps.id);
+            PlayerSnapshot p0 = previousSnapshot.players.get(ps.id);
+            PlayerSnapshot p1 = previousSnapshot.players.get(ps.id);
 
             if (p0 == null || p1 == null) continue;
-
-            float t = (localTime - p0.time) / (p1.time - p0.time);
-            t = MathUtils.clamp(t, 0f, 1f);
 
             ps.x = MathUtils.lerp(p0.x, p1.x, t);
             ps.y = MathUtils.lerp(p0.y, p1.y, t);
@@ -347,7 +333,7 @@ public class GameScreen implements Screen {
     }
 
     private PlayerSnapshot findPlayer(WorldSnapshotMessage snap, int id) {
-        for (PlayerSnapshot p : snap.players) {
+        for (PlayerSnapshot p : snap.players.values()) {
             if (p.id == id) return p;
         }
         return null;
@@ -448,11 +434,9 @@ public class GameScreen implements Screen {
     }
 
     private void handleWorldSnapshot(WorldSnapshotMessage msg) {
-        snapshotBuffer.addLast(msg);
+        previousSnapshot = latestSnapshot;
+        latestSnapshot = msg;
         // Prevent runaway memory
-        while (snapshotBuffer.size() > 20) {
-            snapshotBuffer.removeFirst();
-        }
     }
 
     public void addChatMessage(String message) {

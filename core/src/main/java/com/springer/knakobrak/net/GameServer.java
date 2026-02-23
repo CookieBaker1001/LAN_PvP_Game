@@ -24,23 +24,24 @@ import static com.springer.knakobrak.util.Constants.*;
 public class GameServer implements Runnable {
 
     private ServerSocket serverSocket;
-    private Thread sevrerThread;
+    private Thread gameLoopThread;
     private int port;
-    private volatile boolean running = true;
+    private volatile boolean running;
 
     private final BlockingQueue<ServerMessage> inbox = new LinkedBlockingQueue<>();
 
     private ClientHandler host;
-    private static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
+    private final static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(1);
 
-    private PhysicsSimulation simulation;
+    private final PhysicsSimulation simulation;
     private int nextProjectileId = 1;
 
     private float serverTime;
 
     public GameServer(int port) throws IOException {
         this.port = port;
+        this.running = true;
         this.serverSocket = new ServerSocket(port);
         this.simulation = new PhysicsSimulation();
         this.serverTime = 0f;
@@ -59,8 +60,8 @@ public class GameServer implements Runnable {
     public void run() {
         try {
             System.out.println("Game server started on port " + port);
-            sevrerThread = new Thread(this::gameLoop, "Game loop");
-            sevrerThread.start();
+            gameLoopThread = new Thread(this::gameLoop, "Game loop");
+            gameLoopThread.start();
             while (running) {
                 Socket socket = serverSocket.accept();
                 ClientHandler client = new ClientHandler(this, socket);
@@ -228,16 +229,24 @@ public class GameServer implements Runnable {
         inbox.add(sm);
     }
 
+    final long TICK_MS = 16; // ~60Hz
+    float SERVER_TICK_SPEED = 1f / 60f;
+
+    float broadcastRefreshRate = 1 / 20f;
+    float broadcastAccumulator = 0f;
     private void gameLoop() {
         while (serverState != ServerState.SHUTDOWN) {
-            final long TICK_MS = 16; // ~60Hz
-            float dt = 1f / 60f;
             processServerMessages();
             if (serverState == ServerState.GAME) {
-                simulation.step(dt, 6, 2);
+                simulation.step(SERVER_TICK_SPEED, 6, 2);
                 syncBodiesToGameState();
-                broadcastGameState();
-                serverTime += dt;
+
+                broadcastAccumulator += SERVER_TICK_SPEED;
+                if (broadcastAccumulator >= broadcastRefreshRate) {
+                    broadcastAccumulator -= broadcastRefreshRate;
+                    broadcastGameState();
+                }
+                serverTime += SERVER_TICK_SPEED;
             }
             try {
                 Thread.sleep(TICK_MS); // ~60 Hz
@@ -292,6 +301,7 @@ public class GameServer implements Runnable {
     }
 
     private void startGame() {
+        System.out.println("[Server]: Ladies and gentlemen; we are starting the GAME!!!");
         serverState = ServerState.GAME;
         broadcast(new StartSimulationMessage());
         //broadcast("START_GAME");
@@ -344,23 +354,23 @@ public class GameServer implements Runnable {
 
     private void broadcastGameState() {
         WorldSnapshotMessage wsm = new WorldSnapshotMessage();
-        wsm.players = new ArrayList<>();
+        wsm.players = new HashMap<>();
         for (ClientHandler c : clients.values()) {
             PlayerSnapshot p = new PlayerSnapshot();
             p.id = c.id;
             p.x = c.playerState.x;
             p.y = c.playerState.y;
             p.time = serverTime;
-            wsm.players.add(p);
+            wsm.players.put(p.id, p);
         }
-        wsm.projectiles = new ArrayList<>();
+        wsm.projectiles = new HashMap<>();
         for (ProjectileState p : simulation.projectiles.values()) {
             ProjectileSnapshot p2 = new ProjectileSnapshot();
             p2.id = p.id;
             p2.ownerId = p.ownerId;
             p2.x = p.x;
             p2.y = p.y;
-            wsm.projectiles.add(p2);
+            wsm.projectiles.put(p2.id, p2);
         }
         wsm.serverTime = this.serverTime;
         broadcast(wsm);

@@ -11,6 +11,7 @@ import com.springer.knakobrak.world.ProjectileSnapshot;
 import com.springer.knakobrak.world.ProjectileState;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public final class NetworkRegistry {
 
@@ -39,6 +40,7 @@ public final class NetworkRegistry {
         kryo.register(PlayerSnapshot.class);
         kryo.register(ProjectileSnapshot.class);
 
+        kryo.register(HashMap.class);
         kryo.register(ArrayList.class);
         kryo.register(int[].class);
         kryo.register(int[][].class);
