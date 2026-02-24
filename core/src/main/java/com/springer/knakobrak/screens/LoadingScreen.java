@@ -8,16 +8,16 @@ import com.badlogic.gdx.graphics.Texture;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.dto.PlayerStateDTO;
 import com.springer.knakobrak.dto.WallDTO;
+import com.springer.knakobrak.net.NetworkListener;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.PlayerState;
 import com.springer.knakobrak.world.Wall;
 
-public class LoadingScreen implements Screen {
+public class LoadingScreen implements Screen, NetworkListener {
 
     private final LanPvpGame game;
     private Texture background;
-    //private ClientGameState gameState;
 
     private boolean initDone;
     private boolean gameStart;
@@ -25,12 +25,9 @@ public class LoadingScreen implements Screen {
     public LoadingScreen(LanPvpGame game) {
         this.game = game;
         this.background = new Texture("loadingBG.png");
-        //this.gameState = game.gameState;
-
         initDone = false;
         gameStart = false;
     }
-
 
     @Override
     public void show() {
@@ -54,11 +51,11 @@ public class LoadingScreen implements Screen {
         game.batch.draw(background, 0, 0, worldWidth, worldHeight);
         game.batch.end();
 
-        game.client.poll(this::handleMessage);
+        game.dispatchNetworkMessages();
 //        stage.act(delta);
 //        stage.draw();
 
-        System.out.println("LS: " + playersDataReceived + ", " + worldDataReceived + ", " + (!gameStart) + ", " + (!sentReady));
+        //System.out.println("LS: " + playersDataReceived + ", " + worldDataReceived + ", " + (!gameStart) + ", " + (!sentReady));
         if (playersDataReceived && worldDataReceived && !gameStart && !sentReady) {
             ReadyMessage rm = new ReadyMessage();
             rm.ready = true;
@@ -73,50 +70,6 @@ public class LoadingScreen implements Screen {
                 );
             game.setScreen(new GameScreen(game));
         }
-    }
-
-    private void handleMessage(NetMessage msg) {
-
-        System.out.println("Received message: " + msg.getClass().getSimpleName());
-        if (msg instanceof InitPlayersMessage) {
-            System.out.println("[C]: INIT_PLAYER");
-            receivePlayerData((InitPlayersMessage) msg);
-        } else if (msg instanceof InitWorldMessage) {
-            System.out.println("[C]: INIT_WORLD");
-            receiveWorldData((InitWorldMessage) msg);
-        } else if (msg instanceof LoadingCompleteMessage) {
-            System.out.println("[C]: INIT_COMPLETE");
-            initDone = true;
-        } else if (msg instanceof StartSimulationMessage) {
-            System.out.println("[C]: START_SIMULATION");
-            gameStart = true;
-        }
-
-//        if (msg.startsWith("INIT_PLAYER")) {
-//            //System.out.println("INIT_PLAYER");
-//            receivePlayerData(msg);
-//        } else if (msg.startsWith("INIT_MAP ")) {
-//            //System.out.println("INIT_MAP");
-//            String[] parts = msg.split(" ");
-//            //System.out.println("Dimensions: " + parts[1] + "x" + parts[2]);
-//        } else if (msg.startsWith("INIT_MAP_WALLS")) {
-//            //System.out.println("INIT_MAP_WALLS");
-//            receiveWalls(msg);
-//        } else if (msg.equals("INIT_DONE")) {
-//            //System.out.println("INIT_DONE");
-//            initDone = true;
-//            try {
-//                ReadyMessage readyMessage = new ReadyMessage();
-//                readyMessage.ready = true;
-//                game.client.send(readyMessage);
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//            //game.client.send("READY");
-//        } else if (msg.equals("START_GAME")) {
-//            //System.out.println("START_GAME");
-//            gameStart = true;
-//        }
     }
 
     private boolean playersDataReceived = false;
@@ -154,27 +107,6 @@ public class LoadingScreen implements Screen {
         worldDataReceived = true;
     }
 
-    private void receiveWalls(String msg) {
-        //System.out.println("Walls: " + msg);
-        String[] parts = msg.split(" ");
-        game.simulation.clearWalls();
-        //gameState.walls.clear();
-        for (int i = 1; i < parts.length; i += 4) {
-            float x = Float.parseFloat(parts[i]);
-            float y = Float.parseFloat(parts[i + 1]);
-            float width = Float.parseFloat(parts[i + 2]);
-            float height = Float.parseFloat(parts[i + 3]);
-            Wall wall = new Wall();
-            wall.x = x;
-            wall.y = y;
-            wall.width = width;
-            wall.height = height;
-            wall.body = LoadUtillities.createWall(game.simulation.world, x, y, (int)height, (int)width);
-            game.simulation.addWall(wall);
-            //System.out.println("Data: " + x + ", " + y + ", " + width + ", " + height);
-        }
-    }
-
     @Override
     public void resize(int width, int height) {
         game.viewport.update(width, height);
@@ -199,5 +131,23 @@ public class LoadingScreen implements Screen {
     public void dispose() {
         background.dispose();
         //stage.dispose();
+    }
+
+    @Override
+    public void handleNetworkMessage(NetMessage msg) {
+        System.out.println("Received message: " + msg.getClass().getSimpleName());
+        if (msg instanceof InitPlayersMessage) {
+            System.out.println("[C]: INIT_PLAYER");
+            receivePlayerData((InitPlayersMessage) msg);
+        } else if (msg instanceof InitWorldMessage) {
+            System.out.println("[C]: INIT_WORLD");
+            receiveWorldData((InitWorldMessage) msg);
+        } else if (msg instanceof LoadingCompleteMessage) {
+            System.out.println("[C]: INIT_COMPLETE");
+            initDone = true;
+        } else if (msg instanceof StartSimulationMessage) {
+            System.out.println("[C]: START_SIMULATION");
+            gameStart = true;
+        }
     }
 }

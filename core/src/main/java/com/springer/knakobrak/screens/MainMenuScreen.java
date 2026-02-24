@@ -4,16 +4,13 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
-import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
-import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.net.GameClient;
@@ -85,7 +82,7 @@ public class MainMenuScreen implements Screen {
                     game.serverThread = new Thread(game.hostedServer, "GameServer");
                     game.serverThread.start();
 
-                    game.client = new GameClient("localhost", game.port);
+                    game.client = new GameClient(game, "localhost", game.port);
                     game.clientThread = new Thread(game.client, "GameClient");
                     game.clientThread.start();
 
@@ -106,7 +103,7 @@ public class MainMenuScreen implements Screen {
                 game.port = Integer.parseInt(portInput.getText());
                 game.username = nameInput.getText();
                 try {
-                    game.client = new GameClient("localhost", game.port);
+                    game.client = new GameClient(game, "localhost", game.port);
                     game.clientThread = new Thread(game.client, "GameClient");
                     game.clientThread.start();
 

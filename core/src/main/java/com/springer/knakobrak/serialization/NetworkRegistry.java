@@ -34,13 +34,13 @@ public final class NetworkRegistry {
         kryo.register(PlayerSnapshotMessage.class);
         kryo.register(DisconnectMessage.class);
         kryo.register(WorldSnapshotMessage.class);
+        kryo.register(ChatMessage.class);
 
         kryo.register(PlayerStateDTO.class);
         kryo.register(WallDTO.class);
         kryo.register(PlayerSnapshot.class);
         kryo.register(ProjectileSnapshot.class);
 
-        kryo.register(HashMap.class);
         kryo.register(ArrayList.class);
         kryo.register(int[].class);
         kryo.register(int[][].class);

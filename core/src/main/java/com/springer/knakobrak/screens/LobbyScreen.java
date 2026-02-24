@@ -12,10 +12,11 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.dto.PlayerStateDTO;
+import com.springer.knakobrak.net.NetworkListener;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.world.PhysicsSimulation;
 
-public class LobbyScreen implements Screen {
+public class LobbyScreen implements Screen, NetworkListener {
 
     private final LanPvpGame game;
     private Stage stage;
@@ -31,13 +32,9 @@ public class LobbyScreen implements Screen {
 
     public LobbyScreen(LanPvpGame game, boolean isHost) {
         this.game = game;
-        //game.gameState = new ClientGameState();
         this.simulation = game.simulation;
-        //this.gameState = game.gameState;
-        //game.players.clear();
         this.isHost = isHost;
         this.background = new Texture("final_frontier.jpg");
-        //this.background = new Texture("libgdx.png");
     }
 
     @Override
@@ -117,7 +114,7 @@ public class LobbyScreen implements Screen {
         game.batch.draw(background, 0, 0, worldWidth, worldHeight);
         game.batch.end();
 
-        game.client.poll(this::handleMessage);
+        game.dispatchNetworkMessages();
         stage.act(delta);
         stage.draw();
     }
@@ -149,7 +146,20 @@ public class LobbyScreen implements Screen {
         stage.dispose();
     }
 
-    private void handleMessage(NetMessage msg) {
+    private void updatePlayerList(LobbyStateMessage msg) {
+        Array<String> names = new Array<>();
+        for (PlayerStateDTO p : msg.players) {
+            String entry = "";
+            if (p.id == game.playerId) entry += "(You) ";
+            entry += p.name;
+            if (p.id == msg.hostId) entry += " (HOST)";
+            names.add(entry);
+        }
+        playerListUI.setItems(names);
+    }
+
+    @Override
+    public void handleNetworkMessage(NetMessage msg) {
         if (msg instanceof JoinAcceptMessage) {
             game.playerId = ((JoinAcceptMessage) msg).clientId;
             System.out.println("Assigned ID: " + game.playerId);
@@ -164,17 +174,5 @@ public class LobbyScreen implements Screen {
             game.cleanupNetworking();
             game.setScreen(new MainMenuScreen(game));
         }
-    }
-
-    private void updatePlayerList(LobbyStateMessage msg) {
-        Array<String> names = new Array<>();
-        for (PlayerStateDTO p : msg.players) {
-            String entry = "";
-            if (p.id == game.playerId) entry += "(You) ";
-            entry += p.name;
-            if (p.id == msg.hostId) entry += " (HOST)";
-            names.add(entry);
-        }
-        playerListUI.setItems(names);
     }
 }

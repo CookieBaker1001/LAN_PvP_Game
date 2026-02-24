@@ -3,17 +3,14 @@ package com.springer.knakobrak.net;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.net.messages.DisconnectMessage;
-import com.springer.knakobrak.net.messages.JoinMessage;
 import com.springer.knakobrak.net.messages.NetMessage;
 import com.springer.knakobrak.serialization.NetworkRegistry;
 import java.io.*;
 import java.net.Socket;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.function.Consumer;
 
 public class GameClient implements Runnable {
 
@@ -24,14 +21,16 @@ public class GameClient implements Runnable {
     private final Output out;
 
     private final Queue<NetMessage> incoming;
-    //private final BlockingQueue<NetMessage> outgoing;
 
     private volatile boolean connected;
 
     String host;
     int port;
 
-    public GameClient(String host, int port) throws IOException {
+    private LanPvpGame game;
+
+    public GameClient(LanPvpGame game, String host, int port) throws IOException {
+        this.game =  game;
         this.host = host;
         this.port = port;
         socket = new Socket(host, port);
@@ -74,14 +73,12 @@ public class GameClient implements Runnable {
         }
     }
 
-    // Used by Client classes to receive messages
-    public void poll(Consumer<NetMessage> handler) {
-        NetMessage msg;
-        while ((msg = incoming.poll()) != null) {
-            //System.out.println("Received message!");
-            System.out.println("Polling: " + msg.getClass().getSimpleName());
-            handler.accept(msg);
-        }
+    public NetMessage pollOne() {
+        return incoming.poll();
+    }
+
+    public boolean hasOne() {
+        return !incoming.isEmpty();
     }
 
     public void disconnect() {

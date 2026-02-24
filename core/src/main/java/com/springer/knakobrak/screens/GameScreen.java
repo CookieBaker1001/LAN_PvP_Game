@@ -18,6 +18,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
+import com.springer.knakobrak.net.NetworkListener;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.*;
@@ -27,7 +28,7 @@ import static com.springer.knakobrak.util.Constants.*;
 
 import java.util.*;
 
-public class GameScreen implements Screen {
+public class GameScreen implements Screen, NetworkListener {
 
     private final LanPvpGame game;
     private Stage stage;
@@ -137,7 +138,7 @@ public class GameScreen implements Screen {
             localPlayer = game.localPlayer;
             return;
         }
-        game.client.poll(this::handleMessage); // Check for incoming data to be put into the queue
+        game.dispatchNetworkMessages();
         localTime += delta; // age localtime
         input(delta); // detect local input, move, and tell the server
 
@@ -187,13 +188,6 @@ public class GameScreen implements Screen {
             ChatMessage chatMessage = new ChatMessage();
             chatMessage.message = "<" + game.username + ">" + msg;
             game.client.send(chatMessage);
-
-
-            //game.client.send("MSG <" + game.username + ">" + msg);
-            //sendMessageToServer(msg);
-
-            // Optional: show locally
-            //addChatMessage("You: " + msg);
         }
 
         chatInput.setText("");
@@ -320,23 +314,16 @@ public class GameScreen implements Screen {
         t = MathUtils.clamp(t, 0f, 1f);
 
         for (PlayerState ps : simulation.players.values()) {
-            if (ps == localPlayer) continue;
+            if (ps.id == localPlayer.id) continue;
 
-            PlayerSnapshot p0 = previousSnapshot.players.get(ps.id);
-            PlayerSnapshot p1 = previousSnapshot.players.get(ps.id);
+            PlayerSnapshot p0 = previousSnapshot.players.get(ps.id-1);
+            PlayerSnapshot p1 = previousSnapshot.players.get(ps.id-1);
 
             if (p0 == null || p1 == null) continue;
 
             ps.x = MathUtils.lerp(p0.x, p1.x, t);
             ps.y = MathUtils.lerp(p0.y, p1.y, t);
         }
-    }
-
-    private PlayerSnapshot findPlayer(WorldSnapshotMessage snap, int id) {
-        for (PlayerSnapshot p : snap.players.values()) {
-            if (p.id == id) return p;
-        }
-        return null;
     }
 
     private void updateCoordinateLabel() {
@@ -424,23 +411,14 @@ public class GameScreen implements Screen {
         background.dispose();
     }
 
-    private void handleMessage(NetMessage msg) {
-        if (msg instanceof WorldSnapshotMessage) {
-            handleWorldSnapshot((WorldSnapshotMessage) msg);
-        }
-        else {
-            System.out.println("Unknown message type... " + msg.getClass());
-        }
-    }
-
     private void handleWorldSnapshot(WorldSnapshotMessage msg) {
         previousSnapshot = latestSnapshot;
         latestSnapshot = msg;
         // Prevent runaway memory
     }
 
-    public void addChatMessage(String message) {
-        chatLog.setText(chatLog.getText() + "\n" + message);
+    public void addChatMessage(ChatMessage msg) {
+        chatLog.setText(chatLog.getText() + "\n" + msg.message);
 
         // Scroll to bottom
         Gdx.app.postRunnable(() -> {
@@ -449,22 +427,14 @@ public class GameScreen implements Screen {
         });
     }
 
-    private void onServerSnapshot(PlayerSnapshotMessage psm) {
-        if (psm.id != localPlayer.id) return;
-
-        // 1️⃣ Correct position
-        Body body = localPlayer.body;
-        body.setTransform(psm.position, body.getAngle());
-        body.setLinearVelocity(psm.velocity);
-
-        // 2️⃣ Drop acknowledged inputs
-        pendingInputs.removeIf(
-            input -> input.sequence <= psm.lastProcessedInput
-        );
-
-        // 3️⃣ Re-apply remaining inputs
-        for (PlayerInputMessage input : pendingInputs) {
-            //applyInputToBody(body, input);
+    @Override
+    public void handleNetworkMessage(NetMessage msg) {
+        if (msg instanceof WorldSnapshotMessage) {
+            handleWorldSnapshot((WorldSnapshotMessage) msg);
+        } else if (msg instanceof ChatMessage) {
+            addChatMessage((ChatMessage) msg);
+        } else {
+            System.out.println("Unknown message type... " + msg.getClass());
         }
     }
 }

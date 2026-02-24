@@ -156,7 +156,7 @@ public class GameServer implements Runnable {
         switch (serverState) {
             case LOBBY: {handleLobbyMessage(sender, msg);}
             case LOADING: {handleLoadingMessage(sender, msg);}
-                case GAME: {handleGameMessage(sender, msg);}
+            case GAME: {handleGameMessage(sender, msg);}
             default: {}
         }
     }
@@ -168,6 +168,9 @@ public class GameServer implements Runnable {
         } else if (msg instanceof SpawnProjectileMessage) {
             SpawnProjectileMessage spm = (SpawnProjectileMessage) msg;
             handleSpawnProjectile(sender, spm);
+        } else if (msg instanceof ChatMessage) {
+            ChatMessage cm = (ChatMessage) msg;
+            handleChatMessage(cm);
         }
     }
 
@@ -204,6 +207,10 @@ public class GameServer implements Runnable {
             dir.scl(BULLET_SPEED_MPS)
         );
         simulation.projectiles.put(proj.id, proj);
+    }
+
+    void handleChatMessage(ChatMessage cm) {
+        broadcast(cm);
     }
 
     void handleLoadingMessage(ClientHandler sender, NetMessage msg) {
@@ -354,23 +361,23 @@ public class GameServer implements Runnable {
 
     private void broadcastGameState() {
         WorldSnapshotMessage wsm = new WorldSnapshotMessage();
-        wsm.players = new HashMap<>();
+        wsm.players = new ArrayList<>();
         for (ClientHandler c : clients.values()) {
             PlayerSnapshot p = new PlayerSnapshot();
             p.id = c.id;
             p.x = c.playerState.x;
             p.y = c.playerState.y;
             p.time = serverTime;
-            wsm.players.put(p.id, p);
+            wsm.players.add(p);
         }
-        wsm.projectiles = new HashMap<>();
+        wsm.projectiles = new ArrayList<>();
         for (ProjectileState p : simulation.projectiles.values()) {
             ProjectileSnapshot p2 = new ProjectileSnapshot();
             p2.id = p.id;
             p2.ownerId = p.ownerId;
             p2.x = p.x;
             p2.y = p.y;
-            wsm.projectiles.put(p2.id, p2);
+            wsm.projectiles.add(p2);
         }
         wsm.serverTime = this.serverTime;
         broadcast(wsm);
