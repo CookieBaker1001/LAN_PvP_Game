@@ -94,7 +94,6 @@ public class PhysicsSimulation {
             public void beginContact(Contact contact) {
                 Object a = contact.getFixtureA().getUserData();
                 Object b = contact.getFixtureB().getUserData();
-
                 handleCollision(a, b);
             }
 

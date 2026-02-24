@@ -59,14 +59,14 @@ public class GameClient implements Runnable {
         NetMessage msg;
         while (connected) {
             msg = (NetMessage) kryo.readClassAndObject(in);
-            System.out.println("C: RECV <- " + msg.getClass().getSimpleName());
+            //System.out.println("C: RECV <- " + msg.getClass().getSimpleName());
             incoming.offer(msg);
         }
     }
 
     // Used by Client classes to send messages
     public void send(NetMessage msg) {
-        System.out.println("C: SEND -> " + msg.getClass().getSimpleName());
+        //System.out.println("C: SEND -> " + msg.getClass().getSimpleName());
         synchronized (out) {
             kryo.writeClassAndObject(out, msg);
             out.flush();

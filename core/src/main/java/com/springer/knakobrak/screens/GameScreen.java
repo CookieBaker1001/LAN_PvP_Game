@@ -12,10 +12,8 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.physics.box2d.Body;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
-import com.badlogic.gdx.scenes.scene2d.ui.List;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.net.NetworkListener;
@@ -25,8 +23,6 @@ import com.springer.knakobrak.world.*;
 import com.springer.knakobrak.util.Constants;
 
 import static com.springer.knakobrak.util.Constants.*;
-
-import java.util.*;
 
 public class GameScreen implements Screen, NetworkListener {
 
@@ -40,7 +36,6 @@ public class GameScreen implements Screen, NetworkListener {
     private ShapeRenderer shapeRenderer = new ShapeRenderer();
 
     private Label coordinatesLabel;
-    private List<String> consoleMessages;
     private Label chatLog;
     private ScrollPane chatScroll;
     private TextField chatInput;
@@ -52,13 +47,12 @@ public class GameScreen implements Screen, NetworkListener {
     private PlayerState localPlayer;
 
     int nextInputId = 0;
-    Queue<PlayerInputMessage> pendingInputs = new ArrayDeque<>();
     volatile PlayerInputMessage latestInput;
 
     private WorldSnapshotMessage previousSnapshot;
     private WorldSnapshotMessage latestSnapshot;
 
-    static final float INTERPOLATION_DELAY = 0.1f; // 100 ms
+    static final float INTERPOLATION_DELAY = 0.15f; // 100 ms
 
     private float localTime;
 
@@ -104,16 +98,6 @@ public class GameScreen implements Screen, NetworkListener {
         rootTable.bottom().left().pad(10);
         rootTable.add(chatScroll).width(400).height(150).row();
         rootTable.add(chatInput).width(400).height(30);
-
-//        consoleMessages = new List<>(game.uiSkin);
-//        chatScroll = new ScrollPane(consoleMessages, game.uiSkin);
-//
-//        rootTable.add(chatScroll)
-//            .width(150)
-//            .height(100)
-//            .left()
-//            .bottom();
-//        rootTable.row();
     }
 
     float physicsAccumulator = 0f;
@@ -125,22 +109,11 @@ public class GameScreen implements Screen, NetworkListener {
     @Override
     public void render(float delta) {
 
-        secondsAccumulator += delta;
-        if (secondsAccumulator > 1f) {
-            ++secondsCounter;
-            //System.out.println("Time: " + secondsCounter);
-            secondsAccumulator -= 1f;
-        }
-        System.out.println(localTime);
-
-        if (localPlayer == null) {
-            System.out.println("Null-player reference!");
-            localPlayer = game.localPlayer;
-            return;
-        }
         game.dispatchNetworkMessages();
-        localTime += delta; // age localtime
-        input(delta); // detect local input, move, and tell the server
+
+        handlePlayerReconciliation();
+
+        input(delta);
 
         physicsAccumulator += delta;
         while (physicsAccumulator >= FIXED_DT) {
@@ -148,31 +121,31 @@ public class GameScreen implements Screen, NetworkListener {
             physicsAccumulator -= FIXED_DT;
         }
 
-        syncBody(); // Write the local players Box2D coordinates to the pixel coordinates
+        syncBody();
 
-        logic(delta); // handle world snapshots
-        draw(); // render everything
+        handlePlayerInterpolation();
 
-        stage.act(delta); // UI
-        stage.draw(); // UI
+        localLogic();
+        draw();
+
+        stage.act(delta);
+        stage.draw();
+
+        localTime += delta;
+
+        secondsAccumulator += delta;
+        if (secondsAccumulator > 1f) {
+            ++secondsCounter;
+            System.out.println("Time: " + secondsCounter);
+            secondsAccumulator -= 1f;
+        }
+        //System.out.println(localTime);
     }
 
     private void syncBody() {
-//        for (PlayerState p : simulation.players.values()) {
-//            Vector2 pos = p.body.getPosition();
-//            p.x = pos.x;
-//            p.y = pos.y;
-//        }
-
         Vector2 pos = localPlayer.body.getPosition();
         localPlayer.x = pos.x;
         localPlayer.y = pos.y;
-
-//        for (ProjectileState p : simulation.projectiles.values()) {
-//            Vector2 pos = p.body.getPosition();
-//            p.x = pos.x;
-//            p.y = pos.y;
-//        }
     }
 
     private void enterChatMode() {
@@ -298,26 +271,55 @@ public class GameScreen implements Screen, NetworkListener {
         }
     }
 
-    private void logic(float delta) {
-        handleWorldSnapshotBuffer(delta);
+    private void localLogic() {
         moveCameraToPlayer();
         updateCoordinateLabel();
     }
 
-    private void handleWorldSnapshotBuffer(float delta) {
+    private void handlePlayerReconciliation() {
+        if (latestSnapshot == null) return;
+        PlayerSnapshot serverSelf = latestSnapshot.players.get(localPlayer.id - 1);
+
+        if (serverSelf == null) return;
+
+        Vector2 pos = localPlayer.body.getPosition();
+
+        float errorX = serverSelf.x - localPlayer.body.getPosition().x;
+        float errorY = serverSelf.y - localPlayer.body.getPosition().y;
+
+        float errorSq = errorX * errorX +errorY * errorY;
+        if (errorSq > 0.25f) {
+            localPlayer.body.setTransform(serverSelf.x, serverSelf.y, localPlayer.body.getAngle());
+            localPlayer.body.setLinearVelocity(0, 0);
+        }
+
+        float correctionStrength = 0.1f; // tweak (0.05–0.2)
+        localPlayer.body.setTransform(
+            pos.x + errorX * correctionStrength,
+            pos.y + errorY * correctionStrength,
+            localPlayer.body.getAngle()
+        );
+
+
+    }
+
+    private void handlePlayerInterpolation() {
         if (latestSnapshot == null || previousSnapshot == null) return;
 
         float renderTime = localTime - INTERPOLATION_DELAY;
-        float t =
-            (renderTime - previousSnapshot.serverTime) /
-                (latestSnapshot .serverTime - previousSnapshot.serverTime);
+
+        float span = latestSnapshot.serverTime - previousSnapshot.serverTime;
+
+        if (span <= 0f) return;
+
+        float t = (renderTime - previousSnapshot.serverTime) / span;
         t = MathUtils.clamp(t, 0f, 1f);
 
         for (PlayerState ps : simulation.players.values()) {
             if (ps.id == localPlayer.id) continue;
 
             PlayerSnapshot p0 = previousSnapshot.players.get(ps.id-1);
-            PlayerSnapshot p1 = previousSnapshot.players.get(ps.id-1);
+            PlayerSnapshot p1 = latestSnapshot.players.get(ps.id-1);
 
             if (p0 == null || p1 == null) continue;
 
@@ -414,13 +416,10 @@ public class GameScreen implements Screen, NetworkListener {
     private void handleWorldSnapshot(WorldSnapshotMessage msg) {
         previousSnapshot = latestSnapshot;
         latestSnapshot = msg;
-        // Prevent runaway memory
     }
 
     public void addChatMessage(ChatMessage msg) {
         chatLog.setText(chatLog.getText() + "\n" + msg.message);
-
-        // Scroll to bottom
         Gdx.app.postRunnable(() -> {
             chatScroll.layout();
             chatScroll.setScrollPercentY(1f);

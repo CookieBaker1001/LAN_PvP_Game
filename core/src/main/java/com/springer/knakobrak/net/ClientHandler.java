@@ -74,13 +74,13 @@ public class ClientHandler implements Runnable {
         NetMessage msg;
         while (connected) {
             msg = (NetMessage) kryo.readClassAndObject(in);
-            System.out.println("CH"+id+": RECV <- " + msg.getClass().getSimpleName());
+            //System.out.println("CH"+id+": RECV <- " + msg.getClass().getSimpleName());
             server.enqueue(new ServerMessage(this, msg));
         }
     }
 
     public void send(NetMessage msg) {
-        System.out.println("CH"+id+": SEND -> " + msg.getClass().getSimpleName());
+        //System.out.println("CH"+id+": SEND -> " + msg.getClass().getSimpleName());
         synchronized (out) {
             kryo.writeClassAndObject(out, msg);
             out.flush();
