@@ -5,6 +5,7 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.net.messages.DisconnectMessage;
+import com.springer.knakobrak.net.messages.EndGameMessage;
 import com.springer.knakobrak.net.messages.NetMessage;
 import com.springer.knakobrak.serialization.NetworkRegistry;
 import java.io.*;
@@ -23,6 +24,7 @@ public class GameClient implements Runnable {
     private final Queue<NetMessage> incoming;
 
     private volatile boolean connected;
+    private volatile boolean disconnectRequested = false;
 
     String host;
     int port;
@@ -49,8 +51,9 @@ public class GameClient implements Runnable {
         try {
             readLoop();
         } catch (IOException e) {
-            e.printStackTrace();
+            if (!disconnectRequested) e.printStackTrace();
         } finally {
+            cleanup();
             disconnect();
         }
     }
@@ -61,6 +64,8 @@ public class GameClient implements Runnable {
             msg = (NetMessage) kryo.readClassAndObject(in);
             //System.out.println("C: RECV <- " + msg.getClass().getSimpleName());
             incoming.offer(msg);
+
+            if (disconnectRequested) connected = false;
         }
     }
 
@@ -86,6 +91,25 @@ public class GameClient implements Runnable {
         try {
             socket.close();
         } catch (IOException ignored) {}
+        cleanup();
+    }
+
+    public void requestDisconnect() {
+        disconnectRequested = true;
+        DisconnectMessage dcm = new DisconnectMessage();
+        dcm.playerId = game.playerId;
+        send(dcm);
+    }
+
+    public void requestShutdown() {
+        //disconnectRequested = true;
+        EndGameMessage egm = new EndGameMessage();
+        egm.reason = "Host is shutting down";
+        send(egm);
+    }
+
+    public boolean isConnected() {
+        return connected;
     }
 
     public void disconnect(int id) {
@@ -99,7 +123,11 @@ public class GameClient implements Runnable {
         } catch (IOException ignored) {}
     }
 
-    public boolean isConnected() {
-        return connected;
+    private void cleanup() {
+        connected = false;
+
+        try { in.close(); } catch (Exception ignored) {}
+        try { out.close(); } catch (Exception ignored) {}
+        try { socket.close(); } catch (Exception ignored) {}
     }
 }

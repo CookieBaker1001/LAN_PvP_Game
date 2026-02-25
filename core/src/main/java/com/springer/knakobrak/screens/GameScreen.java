@@ -277,7 +277,8 @@ public class GameScreen implements Screen, NetworkListener {
     }
 
     private void handlePlayerReconciliation() {
-        if (latestSnapshot == null) return;
+        if (latestSnapshot == null || previousSnapshot == null) return;
+        if (latestSnapshot.serverTime <= previousSnapshot.serverTime) return;
         PlayerSnapshot serverSelf = latestSnapshot.players.get(localPlayer.id - 1);
 
         if (serverSelf == null) return;
@@ -305,6 +306,7 @@ public class GameScreen implements Screen, NetworkListener {
 
     private void handlePlayerInterpolation() {
         if (latestSnapshot == null || previousSnapshot == null) return;
+        if (latestSnapshot.serverTime <= previousSnapshot.serverTime) return;
 
         float renderTime = localTime - INTERPOLATION_DELAY;
 

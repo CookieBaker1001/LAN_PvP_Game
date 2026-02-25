@@ -27,6 +27,7 @@ public class GameServer implements Runnable {
     private Thread gameLoopThread;
     private int port;
     private volatile boolean running;
+    private volatile boolean shutdownRequested = false;
 
     private final BlockingQueue<ServerMessage> inbox = new LinkedBlockingQueue<>();
 
@@ -62,7 +63,8 @@ public class GameServer implements Runnable {
             System.out.println("Game server started on port " + port);
             gameLoopThread = new Thread(this::gameLoop, "Game loop");
             gameLoopThread.start();
-            while (running) {
+            Thread.sleep(100);
+            while (running && !shutdownRequested) {
                 Socket socket = serverSocket.accept();
                 ClientHandler client = new ClientHandler(this, socket);
                 Thread clientThread = new Thread(client);
@@ -74,6 +76,8 @@ public class GameServer implements Runnable {
                 System.out.println("Server error: " + e.getMessage());
                 e.printStackTrace();
             }
+        } catch (InterruptedException e2) {
+            e2.printStackTrace();
         } finally {
             shutdown();
         }
@@ -87,8 +91,26 @@ public class GameServer implements Runnable {
             handleJoin(sender, jm);
         } else if (msg instanceof DisconnectMessage) {
             DisconnectMessage dcm = (DisconnectMessage) msg;
-            removeClient(sender, dcm);
+            handleDisconnect(sender, dcm);
+        } else if (msg instanceof EndGameMessage) {
+            EndGameMessage egm = (EndGameMessage) msg;
+            handleEndGame(sender, egm);
         }
+    }
+
+    private void handleEndGame(ClientHandler sender, EndGameMessage egm) {
+        shutdownRequested = true;
+        clients.values().forEach(c -> {
+            c.requestDisconnect();
+        });
+    }
+
+    private void handleDisconnect(ClientHandler sender, DisconnectMessage dcm) {
+        if (sender != host) {
+            removeClient(sender, dcm);
+            broadcastPlayerList();
+        }
+        else shutdown();
     }
 
     private void transitionToLoading() {
@@ -140,8 +162,8 @@ public class GameServer implements Runnable {
 
     private void removeClient(ClientHandler sender, DisconnectMessage dcm) {
         System.out.println("Player " + dcm.playerId + " left. Reason: " + dcm.reason);
-        sender.disconnect();
-        broadcastPlayerList();
+        clients.remove(sender.id);
+        sender.requestDisconnect();
     }
 
     // Runs from the game loop
@@ -242,7 +264,7 @@ public class GameServer implements Runnable {
     float broadcastRefreshRate = 1 / 20f;
     float broadcastAccumulator = 0f;
     private void gameLoop() {
-        while (serverState != ServerState.SHUTDOWN) {
+        while (running && !shutdownRequested && serverState != ServerState.SHUTDOWN) {
             processServerMessages();
             if (serverState == ServerState.GAME) {
                 simulation.step(SERVER_TICK_SPEED, 6, 2);
@@ -397,10 +419,11 @@ public class GameServer implements Runnable {
 
     public void shutdown() {
         running = false;
+        host = null;
         clients.values().forEach(ClientHandler::disconnect);
         clients.clear();
         simulation.players.clear();
-        host = null;
+        simulation.projectiles.clear();
         try {
             serverSocket.close();
             serverSocket = null;

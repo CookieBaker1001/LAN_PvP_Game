@@ -69,15 +69,17 @@ public class LobbyScreen implements Screen, NetworkListener {
         leaveButton.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
-                game.client.disconnect(game.playerId);
-                if (isHost) {
-                    game.hostedServer.shutdown();
-                    try {
-                        game.serverThread.join();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
+                if (!game.isHost) game.client.requestDisconnect();
+                else game.client.requestShutdown();
+//                game.client.disconnect(game.playerId);
+//                if (isHost) {
+//                    game.hostedServer.shutdown();
+//                    try {
+//                        game.serverThread.join();
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                    }
+//                }
                 game.setScreen(new MainMenuScreen(game));
             }
         });
@@ -161,18 +163,16 @@ public class LobbyScreen implements Screen, NetworkListener {
     @Override
     public void handleNetworkMessage(NetMessage msg) {
         if (msg instanceof JoinAcceptMessage) {
-            game.playerId = ((JoinAcceptMessage) msg).clientId;
-            System.out.println("Assigned ID: " + game.playerId);
+            JoinAcceptMessage jam = (JoinAcceptMessage) msg;
+            game.playerId = jam.clientId;
+            game.isHost = jam.isHost;
+            System.out.println("Assigned ID: " + game.playerId + ((jam.isHost) ? "(Host)" : ""));
         } else if (msg instanceof LobbyStateMessage) {
             LobbyStateMessage lobbyMsg = (LobbyStateMessage) msg;
             updatePlayerList(lobbyMsg);
         } else if (msg instanceof EnterLoadingMessage) {
             simulation.initPhysics();
             game.setScreen(new LoadingScreen(game));
-        } else if (msg instanceof EndGameMessage) {
-            System.out.println(((EndGameMessage) msg).reason);
-            game.cleanupNetworking();
-            game.setScreen(new MainMenuScreen(game));
         }
     }
 }

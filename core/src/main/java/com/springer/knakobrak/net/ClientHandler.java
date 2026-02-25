@@ -31,9 +31,10 @@ public class ClientHandler implements Runnable {
     private final Output out;
 
     public boolean isHost;
-    private volatile boolean connected;
 
-    //private final BlockingQueue<NetMessage> outgoing;
+    private volatile boolean connected;
+    private volatile boolean disconnectRequested = false;
+
     public PlayerState playerState;
 
     public int lastProcessedInput = 0;
@@ -52,8 +53,6 @@ public class ClientHandler implements Runnable {
         in = new Input(socket.getInputStream());
         out = new Output(socket.getOutputStream());
 
-        //outgoing = new LinkedBlockingQueue<>();
-
         connected = true;
     }
 
@@ -62,11 +61,12 @@ public class ClientHandler implements Runnable {
         try {
             readLoop();
         } catch (IOException e) {
-            System.err.println("CLIENT HANDLER CRASHED: " + id);
-            e.printStackTrace();
+            //System.err.println("CLIENT HANDLER CRASHED: " + id);
+            if (!disconnectRequested) e.printStackTrace();
         } finally {
-            System.err.println("CLIENT HANDLER DISCONNECTING: " + id);
-            disconnect();
+            //System.err.println("CLIENT HANDLER DISCONNECTING: " + id);
+            cleanup();
+            //disconnect();
         }
     }
 
@@ -76,6 +76,8 @@ public class ClientHandler implements Runnable {
             msg = (NetMessage) kryo.readClassAndObject(in);
             //System.out.println("CH"+id+": RECV <- " + msg.getClass().getSimpleName());
             server.enqueue(new ServerMessage(this, msg));
+
+            if (disconnectRequested) connected = false;
         }
     }
 
@@ -87,15 +89,21 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    public void requestDisconnect() {
+        disconnectRequested = true;
+    }
+
     public void disconnect() {
-        System.out.println("Disconnecting!");
-        DisconnectMessage dcm = new DisconnectMessage();
-        dcm.playerId = id;
-        dcm.reason = "Not specified";
-        server.enqueue(new ServerMessage(this, dcm));
-        try {
-            socket.close();
-            socket = null;
-        } catch (IOException ignored) {}
+        disconnectRequested = true;
+        connected = false;
+        cleanup();
+    }
+
+    private void cleanup() {
+        connected = false;
+
+        try { in.close(); } catch (Exception ignored) {}
+        try { out.close(); } catch (Exception ignored) {}
+        try { socket.close(); } catch (Exception ignored) {}
     }
 }

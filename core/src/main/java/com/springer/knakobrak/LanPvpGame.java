@@ -24,12 +24,13 @@ public class LanPvpGame extends Game {
     public Thread clientThread;
     public GameServer hostedServer;
     public Thread serverThread;
+    public int port = 5000;
 
     public PlayerState localPlayer;
+    public String username;
+    public int playerIcon;
     public int playerId;
-
-    public String username = "UNNAMED";
-    public int port = 5000;
+    public boolean isHost = false;
 
     public float worldWidth;
     public float worldHeight;
@@ -39,6 +40,7 @@ public class LanPvpGame extends Game {
     @Override
     public void create() {
         username = "UNNAMED-" + (int)(Math.random() * 100000);
+        playerIcon = 0;
         worldWidth = Gdx.graphics.getWidth();
         worldHeight = Gdx.graphics.getHeight();
         batch = new SpriteBatch();
@@ -87,7 +89,6 @@ public class LanPvpGame extends Game {
     @Override
     public void dispose() {
         batch.dispose();
-//        image.dispose();
         super.dispose();
     }
 
