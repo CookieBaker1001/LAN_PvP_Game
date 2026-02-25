@@ -35,6 +35,7 @@ public final class NetworkRegistry {
         kryo.register(DisconnectMessage.class);
         kryo.register(WorldSnapshotMessage.class);
         kryo.register(ChatMessage.class);
+        kryo.register(EndGameMessage.class);
 
         kryo.register(PlayerStateDTO.class);
         kryo.register(WallDTO.class);

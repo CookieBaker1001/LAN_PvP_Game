@@ -112,6 +112,10 @@ public class GameClient implements Runnable {
         return connected;
     }
 
+    public void shutdown() {
+        disconnectRequested = true;
+    }
+
     public void disconnect(int id) {
         DisconnectMessage dcm = new DisconnectMessage();
         dcm.reason = "Client quit on their own volition";

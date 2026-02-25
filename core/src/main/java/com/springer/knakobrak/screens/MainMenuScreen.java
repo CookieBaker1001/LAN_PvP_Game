@@ -88,6 +88,7 @@ public class MainMenuScreen implements Screen {
 
                     JoinMessage msg = new JoinMessage();
                     msg.playerName = game.username;
+                    msg.playerIcon = game.playerIcon;
                     game.client.send(msg);
 
                     game.setScreen(new LobbyScreen(game, true));

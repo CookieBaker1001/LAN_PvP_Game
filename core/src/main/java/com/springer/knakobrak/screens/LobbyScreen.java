@@ -173,6 +173,9 @@ public class LobbyScreen implements Screen, NetworkListener {
         } else if (msg instanceof EnterLoadingMessage) {
             simulation.initPhysics();
             game.setScreen(new LoadingScreen(game));
+        } else if (msg instanceof DisconnectMessage) {
+            game.client.shutdown();
+            game.setScreen(new MainMenuScreen(game));
         }
     }
 }

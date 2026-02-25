@@ -9,6 +9,7 @@ public class PlayerState implements Serializable {
     public int id;
     public String name;
     public Body body;
+    public int playerIcon;
     public int hp = 3;
     public Color color = Color.WHITE;
     public float x, y;

@@ -21,11 +21,8 @@ public class ClientHandler implements Runnable {
     public int id;
     public String name;
 
-    private Socket socket;
-    private Kryo kryo;
-
-    private OutputStream os;
-    private InputStream is;
+    private final Socket socket;
+    private final Kryo kryo;
 
     private final Input in;
     private final Output out;
@@ -46,9 +43,6 @@ public class ClientHandler implements Runnable {
         kryo = new Kryo();
         NetworkRegistry.register(kryo);
         kryo.setReferences(false);
-
-        os = socket.getOutputStream();
-        is = socket.getInputStream();
 
         in = new Input(socket.getInputStream());
         out = new Output(socket.getOutputStream());
@@ -91,6 +85,10 @@ public class ClientHandler implements Runnable {
 
     public void requestDisconnect() {
         disconnectRequested = true;
+        try {
+            DisconnectMessage dcm = new DisconnectMessage();
+            send(dcm);
+        } catch (Exception ignored) {}
     }
 
     public void disconnect() {

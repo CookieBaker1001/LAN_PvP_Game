@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
@@ -21,6 +22,9 @@ import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.*;
 import com.springer.knakobrak.util.Constants;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.springer.knakobrak.util.Constants.*;
 
@@ -45,6 +49,7 @@ public class GameScreen implements Screen, NetworkListener {
 
     private PhysicsSimulation simulation;
     private PlayerState localPlayer;
+    private Map<Integer, Texture> playerSkins = new HashMap<>();
 
     int nextInputId = 0;
     volatile PlayerInputMessage latestInput;
@@ -98,6 +103,12 @@ public class GameScreen implements Screen, NetworkListener {
         rootTable.bottom().left().pad(10);
         rootTable.add(chatScroll).width(400).height(150).row();
         rootTable.add(chatInput).width(400).height(30);
+
+        int i = 0;
+        for (PlayerState ps : simulation.players.values()) {
+            playerSkins.put(i, new Texture("characters/p" + ps.playerIcon + ".png"));
+            i++;
+        }
     }
 
     float physicsAccumulator = 0f;
@@ -279,7 +290,7 @@ public class GameScreen implements Screen, NetworkListener {
     private void handlePlayerReconciliation() {
         if (latestSnapshot == null || previousSnapshot == null) return;
         if (latestSnapshot.serverTime <= previousSnapshot.serverTime) return;
-        PlayerSnapshot serverSelf = latestSnapshot.players.get(localPlayer.id - 1);
+        PlayerSnapshot serverSelf = latestSnapshot.players.get(localPlayer.id);
 
         if (serverSelf == null) return;
 
@@ -320,8 +331,8 @@ public class GameScreen implements Screen, NetworkListener {
         for (PlayerState ps : simulation.players.values()) {
             if (ps.id == localPlayer.id) continue;
 
-            PlayerSnapshot p0 = previousSnapshot.players.get(ps.id-1);
-            PlayerSnapshot p1 = latestSnapshot.players.get(ps.id-1);
+            PlayerSnapshot p0 = previousSnapshot.players.get(ps.id);
+            PlayerSnapshot p1 = latestSnapshot.players.get(ps.id);
 
             if (p0 == null || p1 == null) continue;
 
@@ -349,6 +360,16 @@ public class GameScreen implements Screen, NetworkListener {
         game.worldHeight = game.viewport.getWorldHeight();
         batch.draw(background, 0, 0, game.worldWidth, game.worldHeight);
 
+        for (PlayerState p : simulation.players.values()) {
+
+            float px = Constants.metersToPx(p.x);
+            float py = Constants.metersToPx(p.y);
+
+            batch.draw(playerSkins.get(p.id), px - PLAYER_RADIUS_PX, py - PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2);
+//            shapeRenderer.setColor(p.color);
+//            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), PLAYER_RADIUS_PX);
+        }
+
         batch.end();
 
         shapeRenderer.setProjectionMatrix(camera.combined);
@@ -366,10 +387,10 @@ public class GameScreen implements Screen, NetworkListener {
                 wh
             );
         }
-        for (PlayerState p : simulation.players.values()) {
-            shapeRenderer.setColor(p.color);
-            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), PLAYER_RADIUS_PX);
-        }
+//        for (PlayerState p : simulation.players.values()) {
+//            shapeRenderer.setColor(p.color);
+//            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), PLAYER_RADIUS_PX);
+//        }
         shapeRenderer.setColor(Color.YELLOW);
         for (ProjectileState p : simulation.projectiles.values()) {
             shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), BULLET_RADIUS_PX);

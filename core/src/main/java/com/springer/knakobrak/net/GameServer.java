@@ -33,7 +33,7 @@ public class GameServer implements Runnable {
 
     private ClientHandler host;
     private final static Map<Integer, ClientHandler> clients = new ConcurrentHashMap<>();
-    private final AtomicInteger nextId = new AtomicInteger(1);
+    private final AtomicInteger nextId = new AtomicInteger(0);
 
     private final PhysicsSimulation simulation;
     private int nextProjectileId = 1;
@@ -63,22 +63,30 @@ public class GameServer implements Runnable {
             System.out.println("Game server started on port " + port);
             gameLoopThread = new Thread(this::gameLoop, "Game loop");
             gameLoopThread.start();
-            Thread.sleep(100);
-            while (running && !shutdownRequested) {
+            //Thread.sleep(100);
+
+            while (running) {
                 Socket socket = serverSocket.accept();
+                if (!running) break;
+
                 ClientHandler client = new ClientHandler(this, socket);
                 Thread clientThread = new Thread(client);
                 clientThread.start();
+
                 System.out.println("New client connected!");
+                if (shutdownRequested) running = false;
             }
         } catch (IOException e) {
             if (running) {
                 System.out.println("Server error: " + e.getMessage());
                 e.printStackTrace();
             }
-        } catch (InterruptedException e2) {
-            e2.printStackTrace();
-        } finally {
+        }
+//        catch (InterruptedException e2) {
+//            e2.printStackTrace();
+//        }
+        finally {
+            System.out.println("Shutting down!");
             shutdown();
         }
     }
@@ -94,23 +102,32 @@ public class GameServer implements Runnable {
             handleDisconnect(sender, dcm);
         } else if (msg instanceof EndGameMessage) {
             EndGameMessage egm = (EndGameMessage) msg;
-            handleEndGame(sender, egm);
+            handleEndGame(egm);
         }
     }
 
-    private void handleEndGame(ClientHandler sender, EndGameMessage egm) {
+    private void handleEndGame(EndGameMessage egm) {
         shutdownRequested = true;
+        DisconnectMessage dcm = new DisconnectMessage();
+        dcm.reason = egm.reason;
         clients.values().forEach(c -> {
-            c.requestDisconnect();
+            //c.requestDisconnect();
+            dcm.playerId = c.id;
+            removeClient(c, dcm);
         });
+
+        shutdown();
     }
 
     private void handleDisconnect(ClientHandler sender, DisconnectMessage dcm) {
-        if (sender != host) {
-            removeClient(sender, dcm);
-            broadcastPlayerList();
-        }
-        else shutdown();
+        removeClient(sender, dcm);
+        broadcastPlayerList();
+    }
+
+    private void removeClient(ClientHandler sender, DisconnectMessage dcm) {
+        System.out.println("Player " + dcm.playerId + " left. Reason: " + dcm.reason);
+        clients.remove(sender.id);
+        sender.requestDisconnect();
     }
 
     private void transitionToLoading() {
@@ -135,6 +152,7 @@ public class GameServer implements Runnable {
         PlayerState ps = new PlayerState();
         ps.id = id;
         ps.name = jm.playerName;
+        ps.playerIcon = jm.playerIcon;
         ps.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
         simulation.players.put(id, ps);
         sender.playerState = ps;
@@ -158,12 +176,6 @@ public class GameServer implements Runnable {
         }
         System.out.println("Broadcasting players!");
         broadcast(lsm);
-    }
-
-    private void removeClient(ClientHandler sender, DisconnectMessage dcm) {
-        System.out.println("Player " + dcm.playerId + " left. Reason: " + dcm.reason);
-        clients.remove(sender.id);
-        sender.requestDisconnect();
     }
 
     // Runs from the game loop
@@ -343,6 +355,7 @@ public class GameServer implements Runnable {
             PlayerStateDTO pDTO = new PlayerStateDTO();
             pDTO.name = p.name;
             pDTO.id = p.id;
+            pDTO.playerIcon = p.playerIcon;
             pDTO.x = p.x;
             pDTO.y = p.y;
             pDTO.r = p.color.r;
@@ -376,7 +389,8 @@ public class GameServer implements Runnable {
             } catch (Exception e) {
                 System.err.println("FAILED TO SEND TO CLIENT " + c.id);
                 e.printStackTrace();
-                c.disconnect();
+                c.requestDisconnect();
+                //c.disconnect();
             }
         });
     }
@@ -420,13 +434,16 @@ public class GameServer implements Runnable {
     public void shutdown() {
         running = false;
         host = null;
-        clients.values().forEach(ClientHandler::disconnect);
+        //clients.values().forEach(ClientHandler::disconnect);
         clients.clear();
         simulation.players.clear();
         simulation.projectiles.clear();
+        serverState = ServerState.SHUTDOWN;
         try {
             serverSocket.close();
             serverSocket = null;
-        } catch (IOException ignored) {}
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
