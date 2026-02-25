@@ -87,7 +87,7 @@ public class LoadingScreen implements Screen, NetworkListener {
             if (ps.id == game.playerId){
                 game.localPlayer = ps;
             }
-            System.out.println("Added player with id " + ps.id);
+            System.out.println("Added player with id " + ps.id + ", and skin " + ps.playerIcon);
         }
         playersDataReceived = true;
     }

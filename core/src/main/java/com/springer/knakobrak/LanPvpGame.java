@@ -32,6 +32,8 @@ public class LanPvpGame extends Game {
     public int playerId;
     public boolean isHost = false;
 
+    public int skinCount = 6;
+
     public float worldWidth;
     public float worldHeight;
 
@@ -40,7 +42,7 @@ public class LanPvpGame extends Game {
     @Override
     public void create() {
         username = "UNNAMED-" + (int)(Math.random() * 100000);
-        playerIcon = (int) (Math.random()*6);
+        //playerIcon = (int) (Math.random() * skinCount);
         worldWidth = Gdx.graphics.getWidth();
         worldHeight = Gdx.graphics.getHeight();
         batch = new SpriteBatch();
