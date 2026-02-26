@@ -13,11 +13,21 @@ public class texturePackerRunner {
         settings.edgePadding = true;
         settings.duplicatePadding = true;
 
-        TexturePacker.process(
-            settings,
-            "assets/characters",          // input directory
-            "assets/skins",                    // output directory
-            "character_skins"            // atlas name (no extension)
-        );
+        boolean characters = false;
+        if (characters) {
+            TexturePacker.process(
+                settings,
+                "assets/characters",          // input directory
+                "assets/skins",                    // output directory
+                "character_skins"            // atlas name (no extension)
+            );
+        } else {
+            TexturePacker.process(
+                settings,
+                "assets/balls",          // input directory
+                "assets/skins",                    // output directory
+                "balls_skins"            // atlas name (no extension)
+            );
+        }
     }
 }

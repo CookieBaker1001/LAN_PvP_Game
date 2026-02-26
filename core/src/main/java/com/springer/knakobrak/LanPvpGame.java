@@ -18,7 +18,6 @@ import com.springer.knakobrak.world.PlayerState;
 public class LanPvpGame extends Game {
     public SpriteBatch batch;
     public Skin uiSkin;
-    public FitViewport viewport;
 
     public GameClient client;
     public Thread clientThread;
@@ -29,10 +28,9 @@ public class LanPvpGame extends Game {
     public PlayerState localPlayer;
     public String username;
     public int playerIcon;
+    public int ballIcon;
     public int playerId;
     public boolean isHost = false;
-
-    public int skinCount = 6;
 
     public float worldWidth;
     public float worldHeight;
@@ -46,20 +44,11 @@ public class LanPvpGame extends Game {
         worldWidth = Gdx.graphics.getWidth();
         worldHeight = Gdx.graphics.getHeight();
         batch = new SpriteBatch();
-//        image = new Texture("libgdx.png");
 
-        //font = new BitmapFont();
-        //uiSkin = new Skin(Gdx.files.internal("ui/metal/metal-ui.json"));
         uiSkin = new Skin(Gdx.files.internal("ui/clean-crispy/clean-crispy-ui.json"));
 
         //viewport = new FitViewport(8, 5);
-        viewport = new FitViewport(worldWidth, worldHeight);
-
-        viewport.update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), true);
-
-        //font has 15pt, but we need to scale it to our viewport by ratio of viewport height to screen height
-        //font.setUseIntegerPositions(false);
-        //font.getData().setScale(viewport.getWorldHeight() / Gdx.graphics.getHeight());
+        //viewport = new FitViewport(worldWidth, worldHeight);
 
         this.simulation = new PhysicsSimulation();
 

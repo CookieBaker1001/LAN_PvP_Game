@@ -7,7 +7,6 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
@@ -16,6 +15,8 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
+import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.viewport.Viewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.net.NetworkListener;
 import com.springer.knakobrak.net.messages.*;
@@ -36,6 +37,8 @@ public class GameScreen implements Screen, NetworkListener {
     private OrthographicCamera camera;
     private SpriteBatch batch;
     private Texture background;
+
+    private Viewport worldViewPort;
 
     private ShapeRenderer shapeRenderer = new ShapeRenderer();
 
@@ -72,8 +75,13 @@ public class GameScreen implements Screen, NetworkListener {
 
     @Override
     public void show() {
-        camera = new OrthographicCamera();
-        camera.setToOrtho(false, game.viewport.getScreenWidth(), game.viewport.getScreenHeight());
+        worldViewPort = new FitViewport(1280, 720);
+        stage = new Stage(new FitViewport(1280, 720));
+        Gdx.input.setInputProcessor(stage);
+
+
+        //camera = new OrthographicCamera();
+        //camera.setToOrtho(false, game.viewport.getScreenWidth(), game.viewport.getScreenHeight());
 
         shapeRenderer = new ShapeRenderer();
         background = new Texture("grass_bg.png");
@@ -226,7 +234,8 @@ public class GameScreen implements Screen, NetworkListener {
                 0
             );
 
-            camera.unproject(mouse);
+            //camera.unproject(mouse);
+            worldViewPort.unproject(mouse);
 
             float mouseDx = mouse.x - Constants.metersToPx(localPlayer.x);
             float mouseDy = mouse.y - Constants.metersToPx(localPlayer.y);
@@ -277,8 +286,11 @@ public class GameScreen implements Screen, NetworkListener {
         if (localPlayer != null) {
             float x = Constants.metersToPx(localPlayer.x);
             float y = Constants.metersToPx(localPlayer.y);
-            camera.position.set(x, y, 0);
-            camera.update();
+            //camera.position.set(x, y, 0);
+            //camera.update();
+            OrthographicCamera cam = (OrthographicCamera) worldViewPort.getCamera();
+
+            cam.position.set(x, y, 0);
         }
     }
 
@@ -352,13 +364,18 @@ public class GameScreen implements Screen, NetworkListener {
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        game.viewport.apply();
-        batch.setProjectionMatrix(camera.combined);
+        //game.viewport.apply();
+        //batch.setProjectionMatrix(camera.combined);
+
+        worldViewPort.apply();
+        batch.setProjectionMatrix(worldViewPort.getCamera().combined);
+
         batch.begin();
 
-        game.worldWidth = game.viewport.getWorldWidth();
-        game.worldHeight = game.viewport.getWorldHeight();
-        batch.draw(background, 0, 0, game.worldWidth, game.worldHeight);
+        //game.worldWidth = game.viewport.getWorldWidth();
+        //game.worldHeight = game.viewport.getWorldHeight();
+
+        batch.draw(background, 0, 0, worldViewPort.getWorldWidth(), worldViewPort.getWorldHeight());
 
         for (PlayerState p : simulation.players.values()) {
 
@@ -372,7 +389,8 @@ public class GameScreen implements Screen, NetworkListener {
 
         batch.end();
 
-        shapeRenderer.setProjectionMatrix(camera.combined);
+        //shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.setProjectionMatrix(worldViewPort.getCamera().combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(Color.BROWN);
         for (Wall w : simulation.walls) {
@@ -412,7 +430,9 @@ public class GameScreen implements Screen, NetworkListener {
 
     @Override
     public void resize(int width, int height) {
-        game.viewport.update(width, height);
+        //game.viewport.update(width, height);
+        worldViewPort.update(width, height, true);
+        stage.getViewport().update(width, height, true);
     }
 
     @Override

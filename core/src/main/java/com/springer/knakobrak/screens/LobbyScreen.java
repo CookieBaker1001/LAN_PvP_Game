@@ -10,6 +10,8 @@ import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
+import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.viewport.Viewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.dto.PlayerStateDTO;
 import com.springer.knakobrak.net.NetworkListener;
@@ -30,6 +32,8 @@ public class LobbyScreen implements Screen, NetworkListener {
 
     private PhysicsSimulation simulation;
 
+    private Viewport worldViewPort;
+
     public LobbyScreen(LanPvpGame game, boolean isHost) {
         this.game = game;
         this.simulation = game.simulation;
@@ -39,7 +43,8 @@ public class LobbyScreen implements Screen, NetworkListener {
 
     @Override
     public void show() {
-        stage = new Stage(new ExtendViewport(Gdx.graphics.getWidth(), Gdx.graphics.getHeight()));
+        worldViewPort = new FitViewport(1280, 720);
+        stage = new Stage(new FitViewport(1280, 720));
         Gdx.input.setInputProcessor(stage);
 
         playerListUI = new List<>(game.uiSkin);
@@ -105,15 +110,16 @@ public class LobbyScreen implements Screen, NetworkListener {
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        game.viewport.apply();
-        game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
+        //game.viewport.apply();
+        //game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
+
+
+        worldViewPort.apply();
+        game.batch.setProjectionMatrix(worldViewPort.getCamera().combined);
 
         game.batch.begin();
 
-        float worldWidth = game.viewport.getWorldWidth();
-        float worldHeight = game.viewport.getWorldHeight();
-
-        game.batch.draw(background, 0, 0, worldWidth, worldHeight);
+        game.batch.draw(background, 0, 0, worldViewPort.getWorldWidth(), worldViewPort.getWorldHeight());
         game.batch.end();
 
         game.dispatchNetworkMessages();
@@ -128,7 +134,9 @@ public class LobbyScreen implements Screen, NetworkListener {
     }
 
     @Override public void resize(int width, int height) {
-        game.viewport.update(width, height);
+        //game.viewport.update(width, height);
+        worldViewPort.update(width, height, true);
+        stage.getViewport().update(width, height, true);
     }
     @Override
     public void pause() {

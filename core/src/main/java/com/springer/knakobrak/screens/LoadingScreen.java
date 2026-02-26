@@ -5,6 +5,9 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.viewport.Viewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.dto.PlayerStateDTO;
 import com.springer.knakobrak.dto.WallDTO;
@@ -17,10 +20,13 @@ import com.springer.knakobrak.world.Wall;
 public class LoadingScreen implements Screen, NetworkListener {
 
     private final LanPvpGame game;
+    private Stage stage;
     private Texture background;
 
     private boolean initDone;
     private boolean gameStart;
+
+    private Viewport worldViewPort;
 
     public LoadingScreen(LanPvpGame game) {
         this.game = game;
@@ -31,7 +37,9 @@ public class LoadingScreen implements Screen, NetworkListener {
 
     @Override
     public void show() {
-
+        worldViewPort = new FitViewport(1280, 720);
+        stage = new Stage(new FitViewport(1280, 720));
+        Gdx.input.setInputProcessor(stage);
     }
 
     private boolean sentReady = false;
@@ -40,15 +48,15 @@ public class LoadingScreen implements Screen, NetworkListener {
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        game.viewport.apply();
-        game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
+        //game.viewport.apply();
+        //game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
+
+        worldViewPort.apply();
+        game.batch.setProjectionMatrix(worldViewPort.getCamera().combined);
 
         game.batch.begin();
 
-        float worldWidth = game.viewport.getWorldWidth();
-        float worldHeight = game.viewport.getWorldHeight();
-
-        game.batch.draw(background, 0, 0, worldWidth, worldHeight);
+        game.batch.draw(background, 0, 0, worldViewPort.getWorldWidth(), worldViewPort.getWorldHeight());
         game.batch.end();
 
         game.dispatchNetworkMessages();
@@ -110,7 +118,9 @@ public class LoadingScreen implements Screen, NetworkListener {
 
     @Override
     public void resize(int width, int height) {
-        game.viewport.update(width, height);
+        //game.viewport.update(width, height);
+        worldViewPort.update(width, height, true);
+        stage.getViewport().update(width, height, true);
     }
 
     @Override
@@ -131,7 +141,7 @@ public class LoadingScreen implements Screen, NetworkListener {
     @Override
     public void dispose() {
         background.dispose();
-        //stage.dispose();
+        stage.dispose();
     }
 
     @Override

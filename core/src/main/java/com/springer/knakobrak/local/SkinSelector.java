@@ -16,41 +16,41 @@ public class SkinSelector {
     private Image previewImage;
     private Table root;
 
-    public SkinSelector(Skin uiSkin, Array<Drawable> availableSkins) {
+    public SkinSelector(Skin uiSkin, Array<Drawable> availableSkins, int type) {
         this.skins = availableSkins;
 
         previewImage = new Image(skins.first());
         previewImage.setScaling(Scaling.fit);
 
-        TextButton prevBtn = new TextButton("<", uiSkin);
-        TextButton nextBtn = new TextButton(">", uiSkin);
+        TextButton prevSkinBtn = new TextButton("<", uiSkin);
+        TextButton nextSkinBtn = new TextButton(">", uiSkin);
 
-        prevBtn.addListener(new ChangeListener() {
+        prevSkinBtn.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
                 previous();
             }
         });
 
-        nextBtn.addListener(new ChangeListener() {
+        nextSkinBtn.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
                 next();
             }
         });
 
-//        previewImage.addAction(Actions.sequence(
-//            Actions.fadeOut(0.1f),
-//            Actions.run(this::updatePreview),
-//            Actions.fadeIn(0.1f)
-//        ));
+        previewImage.addAction(Actions.sequence(
+            Actions.fadeOut(0.1f),
+            Actions.run(this::updatePreview),
+            Actions.fadeIn(0.1f)
+        ));
 
         root = new Table();
-        root.add(new Label("Skin select", uiSkin));
+        root.add(new Label((type == 1) ? "Skin" : "Ball" + " select", uiSkin));
         root.row();
-        root.add(prevBtn).pad(10);
+        root.add(prevSkinBtn).pad(10);
         root.add(previewImage).size(128, 128).pad(10);
-        root.add(nextBtn).pad(10);
+        root.add(nextSkinBtn).pad(10);
     }
 
     private void previous() {

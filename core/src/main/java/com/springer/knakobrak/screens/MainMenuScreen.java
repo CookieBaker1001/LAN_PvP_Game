@@ -13,7 +13,8 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Array;
-import com.badlogic.gdx.utils.viewport.ExtendViewport;
+import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.viewport.Viewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.local.SkinSelector;
 import com.springer.knakobrak.net.GameClient;
@@ -28,8 +29,10 @@ public class MainMenuScreen implements Screen {
     private Stage stage;
     private Table root;
     private TextureAtlas skinAtlas;
-    private Texture background;
-    private Sprite[] playerSkins;
+    private TextureAtlas ballAtlas;
+    private final Texture background;
+
+    private Viewport worldViewPort;
 
     public MainMenuScreen(LanPvpGame game) {
         this.game = game;
@@ -38,54 +41,74 @@ public class MainMenuScreen implements Screen {
 
     @Override
     public void show() {
-        stage = new Stage(new ExtendViewport(Gdx.graphics.getWidth(), Gdx.graphics.getHeight()));
+        //stage = new Stage(new ExtendViewport(Gdx.graphics.getWidth(), Gdx.graphics.getHeight()));
+        worldViewPort = new FitViewport(1280, 720);
+        stage = new Stage(new FitViewport(1280, 720));
         Gdx.input.setInputProcessor(stage);
 
         root = new Table();
         root.setFillParent(true);
+        root.center();
         stage.addActor(root);
 
-        root.pad(20);
 
-        Label title = new Label("Pvp Game", game.uiSkin);
-        title.setFontScale(1.5f);
-
-        root.add(title).colspan(2).padBottom(20);
-        root.row();
 
         skinAtlas = new TextureAtlas("skins/character_skins.atlas");
         Array<Drawable> skins = new Array<>();
         for (TextureAtlas.AtlasRegion region : skinAtlas.getRegions()) {
             skins.add(new TextureRegionDrawable(region));
         }
+        SkinSelector skinSelector = new SkinSelector(game.uiSkin, skins, 1);
 
-        SkinSelector skinSelector = new SkinSelector(game.uiSkin, skins);
-        root.add(skinSelector.getRoot());
+        ballAtlas = new TextureAtlas("skins/balls_skins.atlas");
+        Array<Drawable> balls = new Array<>();
+        for (TextureAtlas.AtlasRegion region : ballAtlas.getRegions()) {
+            balls.add(new TextureRegionDrawable(region));
+        }
+        SkinSelector ballSelector = new SkinSelector(game.uiSkin, balls, 2);
+
+        Label titleLabel = new Label("Pvp Game", game.uiSkin);
 
         Label nameLabel = new Label("Name:", game.uiSkin);
-        root.add(nameLabel).pad(20);
         TextField nameInput = new TextField(game.username, game.uiSkin);
-        root.add(nameInput).pad(20);
-        root.row();
 
         Label portLabel = new Label("Port:", game.uiSkin);
-        root.add(portLabel).pad(20);
         TextField portInput = new TextField("" + game.port, game.uiSkin);
-        root.add(portInput).pad(20);
-        root.row();
+
+        Label statusLabel = new Label("", game.uiSkin);
 
         TextButton hostButton = new TextButton("Host game", game.uiSkin);
-        root.add(hostButton).pad(20);
-        Label statusLabel = new Label("", game.uiSkin);
-        root.add(statusLabel).pad(20);
-        root.row();
-
         TextButton joinButton = new TextButton("Join Game", game.uiSkin);
-        root.add(joinButton).pad(20);
-        root.row();
-
         TextButton optionsButton = new TextButton("Options", game.uiSkin);
-        root.add(optionsButton).pad(20);
+
+
+
+        titleLabel.setFontScale(3.5f);
+        root.add(titleLabel).center().padBottom(30);
+        root.row().padTop(10).padBottom(10);
+
+        root.add(skinSelector.getRoot()).left();
+        root.add(ballSelector.getRoot()).right();
+        root.row().padTop(10);
+
+        root.add(nameLabel).right().padRight(10);
+        root.add(nameInput).width(300).height(40);
+        root.row().padTop(10);
+
+        root.add(portLabel).right().padRight(10);
+        root.add(portInput).width(300).height(40);
+        root.row().padTop(30);
+
+        root.add(statusLabel).width(140).height(45);
+        root.row().padTop(30);
+
+        root.add(hostButton).width(140).height(45).padRight(20);
+        root.add(joinButton).width(140).height(45).padRight(20);
+        root.add(optionsButton).width(140).height(45);
+
+        //root.setDebug(true);
+
+
 
         hostButton.addListener(new ChangeListener() {
             @Override
@@ -93,6 +116,7 @@ public class MainMenuScreen implements Screen {
                 game.port = Integer.parseInt(portInput.getText());
                 game.username = nameInput.getText();
                 game.playerIcon = skinSelector.getSelectedIndex();
+                game.ballIcon = ballSelector.getSelectedIndex();
                 try {
                     game.hostedServer = new GameServer(game.port);
                     game.serverThread = new Thread(game.hostedServer, "GameServer");
@@ -145,15 +169,14 @@ public class MainMenuScreen implements Screen {
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        game.viewport.apply();
-        game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
+        //game.viewport.apply();
+        //game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
+        worldViewPort.apply();
+        game.batch.setProjectionMatrix(worldViewPort.getCamera().combined);
 
         game.batch.begin();
 
-        float worldWidth = game.viewport.getWorldWidth();
-        float worldHeight = game.viewport.getWorldHeight();
-
-        game.batch.draw(background, 0, 0, worldWidth, worldHeight);
+        game.batch.draw(background, 0, 0, worldViewPort.getWorldWidth(), worldViewPort.getWorldHeight());
         game.batch.end();
 
         stage.act(delta);
@@ -162,7 +185,9 @@ public class MainMenuScreen implements Screen {
 
     @Override
     public void resize(int width, int height) {
-        game.viewport.update(width, height);
+        //game.viewport.update(width, height);
+        worldViewPort.update(width, height, true);
+        stage.getViewport().update(width, height, true);
     }
 
     @Override
