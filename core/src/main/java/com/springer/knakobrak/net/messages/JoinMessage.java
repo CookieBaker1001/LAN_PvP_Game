@@ -5,6 +5,7 @@ public class JoinMessage extends NetMessage {
 
     public String playerName;
     public int playerIcon;
+    public int ballIcon;
     public int protocolVersion;
 
     public JoinMessage() {

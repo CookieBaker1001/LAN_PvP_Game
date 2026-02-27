@@ -36,7 +36,7 @@ public class GameServer implements Runnable {
     private final AtomicInteger nextId = new AtomicInteger(0);
 
     private final PhysicsSimulation simulation;
-    private int nextProjectileId = 1;
+    private int nextProjectileId = 0;
 
     private float serverTime;
 
@@ -153,6 +153,7 @@ public class GameServer implements Runnable {
         ps.id = id;
         ps.name = jm.playerName;
         ps.playerIcon = jm.playerIcon;
+        ps.ballIcon = jm.ballIcon;
         ps.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
         simulation.players.put(id, ps);
         sender.playerState = ps;
@@ -222,11 +223,13 @@ public class GameServer implements Runnable {
     }
 
     void handleSpawnProjectile(ClientHandler sender, SpawnProjectileMessage spm) {
-        float dx = spm.x;
-        float dy = spm.y;
+        float dx = spm.dx;
+        float dy = spm.dy;
         ProjectileState proj = new ProjectileState();
         proj.id = nextProjectileId++;
         proj.ownerId = sender.id;
+        proj.localPlayerFireSequence = spm.fireSequence;
+        proj.isAlive = true;
         Vector2 dir = new Vector2(dx, dy).nor();
         Vector2 spawnPos = sender.playerState.body.getPosition()
             .cpy()
@@ -244,6 +247,7 @@ public class GameServer implements Runnable {
     }
 
     void handleChatMessage(ChatMessage cm) {
+        cm.message = "<" + clients.get(cm.playerId).name + ">" + cm.message;
         broadcast(cm);
     }
 
@@ -356,6 +360,7 @@ public class GameServer implements Runnable {
             pDTO.name = p.name;
             pDTO.id = p.id;
             pDTO.playerIcon = p.playerIcon;
+            pDTO.ballIcon = p.ballIcon;
             pDTO.x = p.x;
             pDTO.y = p.y;
             pDTO.r = p.color.r;
@@ -407,13 +412,17 @@ public class GameServer implements Runnable {
             wsm.players.add(p);
         }
         wsm.projectiles = new ArrayList<>();
-        for (ProjectileState p : simulation.projectiles.values()) {
-            ProjectileSnapshot p2 = new ProjectileSnapshot();
-            p2.id = p.id;
-            p2.ownerId = p.ownerId;
-            p2.x = p.x;
-            p2.y = p.y;
-            wsm.projectiles.add(p2);
+        for (ProjectileState ps : simulation.projectiles.values()) {
+            ProjectileSnapshot snap = new ProjectileSnapshot();
+            snap.id = ps.id;
+            snap.ownerId = ps.ownerId;
+            snap.fireSequence = ps.localPlayerFireSequence;
+            snap.x = ps.x;
+            snap.y = ps.y;
+            snap.vx = ps.body.getLinearVelocity().x;
+            snap.vy = ps.body.getLinearVelocity().y;
+            snap.alive = ps.isAlive;
+            wsm.projectiles.add(snap);
         }
         wsm.serverTime = this.serverTime;
         broadcast(wsm);

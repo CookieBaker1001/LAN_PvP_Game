@@ -2,6 +2,7 @@ package com.springer.knakobrak.world;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
+import com.springer.knakobrak.util.CollisionBits;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,16 +43,7 @@ public class PhysicsSimulation {
             ProjectileState ps = it.next();
             Body body = ps.body;
             if (body == null) continue;
-
             ps.lifeTime += delta;
-
-//            Vector2 pos = body.getPosition();
-//            ps.x = pos.x;
-//            ps.y = pos.y;
-
-//            Vector2 desiredVelocity = new Vector2(ps.vx, ps.vy).scl(BULLET_SPEED);
-//            body.setLinearVelocity(desiredVelocity);
-
             if (ps.lifeTime >= ps.lifeTimeLimit || Math.abs(ps.x) > 500 || Math.abs(ps.y) > 500) {
                 world.destroyBody(body);
                 it.remove();
@@ -92,9 +84,16 @@ public class PhysicsSimulation {
         world.setContactListener(new ContactListener() {
             @Override
             public void beginContact(Contact contact) {
-                Object a = contact.getFixtureA().getUserData();
-                Object b = contact.getFixtureB().getUserData();
-                handleCollision(a, b);
+                Fixture a = contact.getFixtureA();
+                Fixture b = contact.getFixtureB();
+                if (isPredicted(a) || isPredicted(b)) {
+                    System.out.println("NOPE!!");
+                    return;
+                }
+
+                Object a2 = a.getUserData();
+                Object b2 = b.getUserData();
+                handleCollision(a2, b2);
             }
 
             public void endContact(Contact contact) {}
@@ -116,6 +115,10 @@ public class PhysicsSimulation {
         }
     }
 
+    private boolean isPredicted(Fixture f) {
+        return f.getFilterData().categoryBits == CollisionBits.PREDICTED;
+    }
+
     boolean isPlayer(int id) {
         return players.containsKey(id);
     }
@@ -125,14 +128,10 @@ public class PhysicsSimulation {
     }
 
     void hitPlayer(int playerId, int projectileId) {
-        //removeProjectile(projectileId);
-        //projectiles.get(projectileId).isDead = true;
-        //damagePlayer(playerId);
         players.values().forEach(player -> {
             if (player.id == playerId) {
                 player.hp--;
-                //broadcast("DAMAGE " + playerId + " _now_has " + player.hp + " HP.");
-                System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
+                //System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
             }
         });
     }

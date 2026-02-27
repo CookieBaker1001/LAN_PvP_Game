@@ -129,6 +129,7 @@ public class MainMenuScreen implements Screen {
                     JoinMessage msg = new JoinMessage();
                     msg.playerName = game.username;
                     msg.playerIcon = game.playerIcon;
+                    msg.ballIcon = game.ballIcon;
                     game.client.send(msg);
 
                     game.setScreen(new LobbyScreen(game, true));
@@ -144,6 +145,7 @@ public class MainMenuScreen implements Screen {
                 game.port = Integer.parseInt(portInput.getText());
                 game.username = nameInput.getText();
                 game.playerIcon = skinSelector.getSelectedIndex();
+                game.ballIcon = ballSelector.getSelectedIndex();
                 try {
                     game.client = new GameClient(game, "localhost", game.port);
                     game.clientThread = new Thread(game.client, "GameClient");
@@ -152,6 +154,7 @@ public class MainMenuScreen implements Screen {
                     JoinMessage msg = new JoinMessage();
                     msg.playerName = game.username;
                     msg.playerIcon = game.playerIcon;
+                    msg.ballIcon = game.ballIcon;
                     game.client.send(msg);
 
                     game.setScreen(new LobbyScreen(game, false));

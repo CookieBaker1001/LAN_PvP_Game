@@ -39,6 +39,6 @@ public final class Constants {
     public static final float COLLISION_DISTANCE_M =
         PLAYER_RADIUS_M + BULLET_RADIUS_M;
 
-    public static final float BULLET_SPAWN_OFFSET_M = PLAYER_RADIUS_M + BULLET_RADIUS_M + 0.1f;
+    public static final float BULLET_SPAWN_OFFSET_M = PLAYER_RADIUS_M + BULLET_RADIUS_M * 1.1f;
 
 }

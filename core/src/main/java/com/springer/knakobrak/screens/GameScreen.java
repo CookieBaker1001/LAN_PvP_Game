@@ -53,6 +53,7 @@ public class GameScreen implements Screen, NetworkListener {
     private PhysicsSimulation simulation;
     private PlayerState localPlayer;
     private Map<Integer, Texture> playerSkins = new HashMap<>();
+    private Map<Integer, Texture> ballSkins = new HashMap<>();
 
     int nextInputId = 0;
     volatile PlayerInputMessage latestInput;
@@ -63,6 +64,8 @@ public class GameScreen implements Screen, NetworkListener {
     static final float INTERPOLATION_DELAY = 0.15f; // 100 ms
 
     private float localTime;
+
+    Map<Integer, PredictedProjectile> predictedProjectiles = new HashMap<>();
 
 
     public GameScreen(LanPvpGame game) {
@@ -115,6 +118,7 @@ public class GameScreen implements Screen, NetworkListener {
         int i = 0;
         for (PlayerState ps : simulation.players.values()) {
             playerSkins.put(i, new Texture("characters/p" + ps.playerIcon + ".png"));
+            ballSkins.put(i, new Texture("balls/b" + ps.ballIcon + ".png"));
             i++;
         }
     }
@@ -145,6 +149,9 @@ public class GameScreen implements Screen, NetworkListener {
         handlePlayerInterpolation();
 
         localLogic();
+
+        syncProjectileBodies();
+
         draw();
 
         stage.act(delta);
@@ -161,10 +168,122 @@ public class GameScreen implements Screen, NetworkListener {
         //System.out.println(localTime);
     }
 
+    private void handleProjectiles() {
+        if (latestSnapshot == null || previousSnapshot == null) return;
+
+//        if (!latestSnapshot.projectiles.isEmpty()) {
+//            System.out.println("Proj: " + latestSnapshot.projectiles.get(0).x);
+//        }
+
+        for (ProjectileSnapshot pss : latestSnapshot.projectiles) {
+            if (pss.ownerId == localPlayer.id) {
+
+                PredictedProjectile predicted = predictedProjectiles.remove(pss.fireSequence);
+
+                if (predicted != null) {
+                    destroy(predicted.projectile);
+
+                    ProjectileState proj = spawnProjectileFromSnapshot(pss);
+                    simulation.projectiles.put(pss.id, proj);
+                    continue;
+                }
+            }
+
+            if (!simulation.projectiles.containsKey(pss.id)) {
+                simulation.projectiles.put(pss.id, spawnProjectileFromSnapshot(pss));
+            }
+        }
+
+//        for (ProjectileSnapshot ps : latestSnapshot.projectiles) {
+//
+//            ProjectileState local = simulation.projectiles.get(ps.id);
+//            //System.out.println("ps.id: " + ps.id);
+//
+//            if (local == null) {
+//                local = spawnProjectile(simulation.getPlayer(ps.ownerId), ps.vx, ps.vy);
+//
+////                simulation.projectiles.put(p.id, p);
+////                SpawnProjectileMessage spm = new SpawnProjectileMessage();
+////                spm.ownerId = localPlayer.id;
+////                spm.fireSequence = nextProjectileId++;
+////                spm.dx = p.body.getLinearVelocity().x;
+////                spm.dy = p.body.getLinearVelocity().y;
+////                game.client.send(spm);
+//
+//                simulation.projectiles.put(ps.id, local);
+//            }
+//
+//            // Soft-correct position
+//            Vector2 pos = local.body.getPosition();
+//            float lerp = 0.25f;
+//
+//            local.body.setTransform(
+//                MathUtils.lerp(pos.x, ps.x, lerp),
+//                MathUtils.lerp(pos.y, ps.y, lerp),
+//                local.body.getAngle()
+//            );
+//        }
+    }
+
+    private void destroy(ProjectileState p) {
+        if (p == null) return;
+
+        System.out.println("Destroyed");
+        // 1. Remove Box2D body
+        if (p.body != null) {
+            simulation.world.destroyBody(p.body);
+            p.body = null;
+        }
+
+        // 2. Remove from simulation collections
+        predictedProjectiles.remove(p.id);
+        //simulation.projectiles.remove(p.id);
+
+        // 3. (Optional) clear other references
+        // e.g. predictedProjectiles map is handled elsewhere
+    }
+
+    private ProjectileState spawnProjectileFromSnapshot(ProjectileSnapshot ps) {
+        System.out.println("Spawning official bullet!");
+        ProjectileState proj = new ProjectileState();
+        //System.out.println("Spawn official bullet: x,y: (" + ps.x + "," + ps.y + ")");
+        proj.id = ps.id;
+        proj.ownerId = ps.ownerId;
+        //System.out.println("[2]: Firing sequence: " + ps.fireSequence);
+        Vector2 dir = new Vector2(ps.vx, ps.vy).nor();
+        Vector2 spawnPos = new Vector2(ps.x, ps.y)
+            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+        proj.body = LoadUtillities.createProjectile(
+            simulation.world,
+            spawnPos.x,
+            spawnPos.y,
+            proj.id
+        );
+        proj.body.setLinearVelocity(
+            dir.scl(BULLET_SPEED_MPS)
+        );
+        //System.out.println("Spawned authoritative bullet at (" + spawnPos.x + "," + spawnPos.y + ")");
+
+        return proj;
+    }
+
     private void syncBody() {
         Vector2 pos = localPlayer.body.getPosition();
         localPlayer.x = pos.x;
         localPlayer.y = pos.y;
+    }
+
+    private void syncProjectileBodies() {
+        for (PredictedProjectile ps : predictedProjectiles.values()) {
+            Vector2 pos = ps.projectile.body.getPosition();
+            ps.projectile.x = pos.x;
+            ps.projectile.y = pos.y;
+        }
+        for (ProjectileState ps : simulation.projectiles.values()) {
+            Vector2 pos = ps.body.getPosition();
+            ps.x = pos.x;
+            ps.y = pos.y;
+        }
     }
 
     private void enterChatMode() {
@@ -178,7 +297,7 @@ public class GameScreen implements Screen, NetworkListener {
         if (!msg.isEmpty()) {
             // Send to server
             ChatMessage chatMessage = new ChatMessage();
-            chatMessage.message = "<" + game.username + ">" + msg;
+            chatMessage.message = msg;
             game.client.send(chatMessage);
         }
 
@@ -234,7 +353,6 @@ public class GameScreen implements Screen, NetworkListener {
                 0
             );
 
-            //camera.unproject(mouse);
             worldViewPort.unproject(mouse);
 
             float mouseDx = mouse.x - Constants.metersToPx(localPlayer.x);
@@ -246,18 +364,57 @@ public class GameScreen implements Screen, NetworkListener {
             mouseDx /= len;
             mouseDy /= len;
 
-            applyFire(mouseDx, mouseDy);
+            ProjectileState p = spawnLocalProjectile(mouseDx, mouseDy);
+            PredictedProjectile pp = new PredictedProjectile();
+            pp.fireSequence = nextProjectileId++;
+            pp.projectile = p;
+            predictedProjectiles.put(pp.fireSequence, pp);
+
+
+            SpawnProjectileMessage spm = new SpawnProjectileMessage();
+            spm.ownerId = localPlayer.id;
+            spm.fireSequence = pp.fireSequence;
+            spm.dx = p.body.getLinearVelocity().x;
+            spm.dy = p.body.getLinearVelocity().y;
+            game.client.send(spm);
+            System.out.println("Bodies in world: " + simulation.world.getBodyCount());
+            //System.out.println("[1]: Firing sequence: " + pp.fireSequence);
         }
     }
 
-    private int nextProjectileId = 1;
-    private void applyFire(float dx, float dy) {
-        ProjectileState proj = new ProjectileState();
-        proj.id = nextProjectileId++;
-        proj.ownerId = localPlayer.id;
+    private ProjectileState spawnLocalProjectile(float dx, float dy) {
+        System.out.println("Spawning predicted bullet!");
+        ProjectileState p = new ProjectileState();
+        p.ownerId = localPlayer.id;
         Vector2 dir = new Vector2(dx, dy).nor();
 
         Vector2 spawnPos = localPlayer.body.getPosition()
+            .cpy()
+            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+
+        p.body = LoadUtillities.createPredictedProjectile(
+            simulation.world,
+            spawnPos.x,
+            spawnPos.y,
+            p.id
+        );
+
+        p.body.setLinearVelocity(
+            dir.scl(BULLET_SPEED_MPS)
+        );
+
+        //System.out.println("Spawned local bullet at (" + spawnPos.x + "," + spawnPos.y + ")");
+
+        return p;
+    }
+
+    private int nextProjectileId = 1;
+    private ProjectileState spawnProjectile(PlayerState ps, float dx, float dy) {
+        ProjectileState proj = new ProjectileState();
+        proj.ownerId = ps.id;
+        Vector2 dir = new Vector2(dx, dy).nor();
+
+        Vector2 spawnPos = ps.body.getPosition()
             .cpy()
             .add(dir.scl(BULLET_SPAWN_OFFSET_M));
 
@@ -272,7 +429,9 @@ public class GameScreen implements Screen, NetworkListener {
             dir.scl(BULLET_SPEED_MPS)
         );
 
-        simulation.projectiles.put(proj.id, proj);
+        System.out.println("Spawned bullet at (" + spawnPos.x + "," + spawnPos.y + ")");
+
+        return proj;
     }
 
     private void applyMovement(PlayerInputMessage input) {
@@ -323,8 +482,6 @@ public class GameScreen implements Screen, NetworkListener {
             pos.y + errorY * correctionStrength,
             localPlayer.body.getAngle()
         );
-
-
     }
 
     private void handlePlayerInterpolation() {
@@ -364,32 +521,23 @@ public class GameScreen implements Screen, NetworkListener {
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        //game.viewport.apply();
-        //batch.setProjectionMatrix(camera.combined);
-
         worldViewPort.apply();
         batch.setProjectionMatrix(worldViewPort.getCamera().combined);
 
         batch.begin();
-
-        //game.worldWidth = game.viewport.getWorldWidth();
-        //game.worldHeight = game.viewport.getWorldHeight();
-
         batch.draw(background, 0, 0, worldViewPort.getWorldWidth(), worldViewPort.getWorldHeight());
-
         for (PlayerState p : simulation.players.values()) {
-
-            float px = Constants.metersToPx(p.x);
-            float py = Constants.metersToPx(p.y);
-
-            batch.draw(playerSkins.get(p.id), px - PLAYER_RADIUS_PX, py - PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2);
-//            shapeRenderer.setColor(p.color);
-//            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), PLAYER_RADIUS_PX);
+            batch.draw(playerSkins.get(p.id), Constants.metersToPx(p.x) - PLAYER_RADIUS_PX, Constants.metersToPx(p.y) - PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2);
         }
-
+        for (ProjectileState p : simulation.projectiles.values()) {
+//            float x = Constants.metersToPx(p.x) - BULLET_RADIUS_PX;
+//            float y = Constants.metersToPx(p.y) - BULLET_RADIUS_PX;
+//            System.out.println("x,y: (" + x + "," + y + ")");
+//            batch.draw(ballSkins.get(p.ownerId), x, y, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
+            batch.draw(ballSkins.get(p.ownerId), Constants.metersToPx(p.x) - BULLET_RADIUS_PX, Constants.metersToPx(p.y) - BULLET_RADIUS_PX, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
+        }
         batch.end();
 
-        //shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.setProjectionMatrix(worldViewPort.getCamera().combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(Color.BROWN);
@@ -409,10 +557,10 @@ public class GameScreen implements Screen, NetworkListener {
 //            shapeRenderer.setColor(p.color);
 //            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), PLAYER_RADIUS_PX);
 //        }
-        shapeRenderer.setColor(Color.YELLOW);
-        for (ProjectileState p : simulation.projectiles.values()) {
-            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), BULLET_RADIUS_PX);
-        }
+//        shapeRenderer.setColor(Color.YELLOW);
+//        for (ProjectileState p : simulation.projectiles.values()) {
+//            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), BULLET_RADIUS_PX);
+//        }
         shapeRenderer.end();
         drawGrid();
     }
@@ -459,6 +607,7 @@ public class GameScreen implements Screen, NetworkListener {
     private void handleWorldSnapshot(WorldSnapshotMessage msg) {
         previousSnapshot = latestSnapshot;
         latestSnapshot = msg;
+        handleProjectiles();
     }
 
     public void addChatMessage(ChatMessage msg) {

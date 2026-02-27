@@ -3,18 +3,14 @@ package com.springer.knakobrak.util;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
 import com.springer.knakobrak.world.Wall;
-
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-
-import static com.springer.knakobrak.util.Constants.BULLET_RADIUS_M;
-import static com.springer.knakobrak.util.Constants.PLAYER_RADIUS_M;
+import static com.springer.knakobrak.util.Constants.*;
 
 public class LoadUtillities {
-
 
     public static Body createPlayerBody(World world, float x, float y, int playerId) {
         BodyDef bd = new BodyDef();
@@ -32,13 +28,18 @@ public class LoadUtillities {
         fd.friction = 0f;
         fd.restitution = 0.4f;
 
+        fd.filter.categoryBits = CollisionBits.PLAYER;
+        fd.filter.maskBits = CollisionBits.BULLET | CollisionBits.PLAYER;
+
         body.setFixedRotation(true);
 
         Fixture f = body.createFixture(fd);
         f.setUserData(playerId);
 
-        shape.dispose();
+        Filter f2 = f.getFilterData();
+        System.out.println("Player fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
 
+        shape.dispose();
         return body;
     }
 
@@ -59,12 +60,48 @@ public class LoadUtillities {
         fd.friction = 0f;
         fd.restitution = 1f;
 
-        //fd.isSensor = true; // IMPORTANT for bullets
+        fd.filter.categoryBits = CollisionBits.BULLET;
+        fd.filter.maskBits = CollisionBits.PLAYER | CollisionBits.BULLET;
+
+        fd.isSensor = true;
 
         Fixture f = body.createFixture(fd);
         f.setUserData(projId);
 
-        //body.setLinearVelocity(vx, vy);
+        Filter f2 = f.getFilterData();
+        System.out.println("Projectile fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
+
+        shape.dispose();
+        return body;
+    }
+
+    public static Body createPredictedProjectile(World world, float x, float y, int projId) {
+        BodyDef bd = new BodyDef();
+        bd.type = BodyDef.BodyType.DynamicBody;
+        bd.bullet = true;
+        bd.position.set(x, y);
+
+        Body body = world.createBody(bd);
+
+        CircleShape shape = new CircleShape();
+        shape.setRadius(BULLET_RADIUS_M);
+
+        FixtureDef fd = new FixtureDef();
+        fd.shape = shape;
+        fd.density = 1f;
+        fd.friction = 0f;
+        fd.restitution = 1f;
+
+        fd.filter.categoryBits = CollisionBits.PREDICTED;
+        fd.filter.maskBits = 0;
+
+        //fd.isSensor = true;
+
+        Fixture f = body.createFixture(fd);
+        f.setUserData(projId);
+
+        Filter f2 = f.getFilterData();
+        System.out.println("Predicted projectile fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
 
         shape.dispose();
         return body;

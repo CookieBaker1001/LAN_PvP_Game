@@ -87,6 +87,7 @@ public class LoadingScreen implements Screen, NetworkListener {
             ps.id = p.id;
             ps.name = p.name;
             ps.playerIcon = p.playerIcon;
+            ps.ballIcon = p.ballIcon;
             ps.x = p.x;
             ps.y = p.y;
             ps.color = new Color(p.r, p.g, p.b, 1.0f);
