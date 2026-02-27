@@ -45,6 +45,7 @@ public class GameServer implements Runnable {
         this.running = true;
         this.serverSocket = new ServerSocket(port);
         this.simulation = new PhysicsSimulation();
+        this.simulation.initPhysics();
         this.serverTime = 0f;
     }
 
@@ -115,7 +116,6 @@ public class GameServer implements Runnable {
             dcm.playerId = c.id;
             removeClient(c, dcm);
         });
-
         shutdown();
     }
 
@@ -133,7 +133,6 @@ public class GameServer implements Runnable {
     private void transitionToLoading() {
         broadcast(new EnterLoadingMessage());
         serverState = ServerState.LOADING;
-        simulation.initPhysics();
         loadData();
         spawnPlayers();
         sendInitialDataToAllClients();
@@ -145,17 +144,17 @@ public class GameServer implements Runnable {
         int id = nextId.getAndIncrement();
         sender.id = id;
         sender.name = jm.playerName;
-        sender.isHost = clients.isEmpty();
         if (clients.isEmpty()) {
             host = sender;
+            sender.isHost = true;
         }
         PlayerState ps = new PlayerState();
         ps.id = id;
         ps.name = jm.playerName;
         ps.playerIcon = jm.playerIcon;
         ps.ballIcon = jm.ballIcon;
-        ps.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
-        simulation.players.put(id, ps);
+        simulation.addPlayer(ps);
+        //simulation.players.put(id, ps);
         sender.playerState = ps;
         clients.put(id, sender);
         JoinAcceptMessage accept = new JoinAcceptMessage();
@@ -235,7 +234,7 @@ public class GameServer implements Runnable {
             .cpy()
             .add(dir.scl(BULLET_SPAWN_OFFSET_M));
         proj.body = LoadUtillities.createProjectile(
-            simulation.world,
+            simulation.getWorld(),
             spawnPos.x,
             spawnPos.y,
             proj.id
@@ -243,7 +242,8 @@ public class GameServer implements Runnable {
         proj.body.setLinearVelocity(
             dir.scl(BULLET_SPEED_MPS)
         );
-        simulation.projectiles.put(proj.id, proj);
+        simulation.addProjectile(proj);
+        //simulation.projectiles.put(proj.id, proj);
     }
 
     void handleChatMessage(ChatMessage cm) {
@@ -300,14 +300,14 @@ public class GameServer implements Runnable {
     }
 
     private void syncBodiesToGameState() {
-        for (PlayerState p : simulation.players.values()) {
+        for (PlayerState p : simulation.getPlayers().values()) {
             if (p.body == null) continue;
             Vector2 pos = p.body.getPosition();
             p.x = pos.x;
             p.y = pos.y;
         }
 
-        for (ProjectileState proj : simulation.projectiles.values()) {
+        for (ProjectileState proj : simulation.getProjectiles().values()) {
             if (proj.body == null) continue;
             Vector2 pos = proj.body.getPosition();
             proj.x = pos.x;
@@ -317,12 +317,11 @@ public class GameServer implements Runnable {
 
     private void loadData() {
         try {
-            int[][] grid = LoadUtillities.loadLevel("levels/level1.txt");
-            System.out.println();
+            simulation.setWallGrid(LoadUtillities.loadLevel("levels/level1.txt"));
             //printWallGrid(grid);
-            simulation.walls = LoadUtillities.generateWallsFromGrid(simulation.world, grid);
+            simulation.setWalls(LoadUtillities.generateWallsFromGrid(simulation.getWorld(), simulation.getWallGrid()));
             //printWalls(simulation.walls);
-            simulation.playerSpawnPoints = LoadUtillities.getPlayerSpawnPoints(grid);
+            simulation.setPlayerSpawnPoints(LoadUtillities.getPlayerSpawnPoints(simulation.getWallGrid()));
         } catch (IOException e) {
             System.out.println("Error loading level: " + e.getMessage());
             e.printStackTrace();
@@ -355,7 +354,9 @@ public class GameServer implements Runnable {
     private void sendInitialDataToAllClients() {
         InitPlayersMessage ipm = new InitPlayersMessage();
         ArrayList<PlayerStateDTO> playersDTO = new ArrayList<>();
-        for (PlayerState p : simulation.players.values()) {
+        System.out.println("Lets check for players here.");
+        for (PlayerState p : simulation.getPlayers().values()) {
+            System.out.println("Found one player here....");
             PlayerStateDTO pDTO = new PlayerStateDTO();
             pDTO.name = p.name;
             pDTO.id = p.id;
@@ -363,15 +364,12 @@ public class GameServer implements Runnable {
             pDTO.ballIcon = p.ballIcon;
             pDTO.x = p.x;
             pDTO.y = p.y;
-            pDTO.r = p.color.r;
-            pDTO.g = p.color.g;
-            pDTO.b = p.color.b;
             playersDTO.add(pDTO);
         }
         ipm.players = playersDTO;
         InitWorldMessage iwm = new InitWorldMessage();
         ArrayList<WallDTO> walls = new ArrayList<>();
-        for (Wall w : simulation.walls) {
+        for (Wall w : simulation.getWalls()) {
             WallDTO wDTO = new WallDTO();
             wDTO.x = w.x;
             wDTO.y = w.y;
@@ -380,7 +378,8 @@ public class GameServer implements Runnable {
             walls.add(wDTO);
         }
         iwm.walls = walls;
-        iwm.spawnPoints = simulation.playerSpawnPoints;
+        iwm.spawnPoints = simulation.getPlayerSpawnPoints();
+        iwm.wallBits = simulation.getWallGrid();
         for (ClientHandler c : clients.values()) {
             c.send(ipm);
             c.send(iwm);
@@ -412,7 +411,7 @@ public class GameServer implements Runnable {
             wsm.players.add(p);
         }
         wsm.projectiles = new ArrayList<>();
-        for (ProjectileState ps : simulation.projectiles.values()) {
+        for (ProjectileState ps : simulation.getProjectiles().values()) {
             ProjectileSnapshot snap = new ProjectileSnapshot();
             snap.id = ps.id;
             snap.ownerId = ps.ownerId;
@@ -430,12 +429,12 @@ public class GameServer implements Runnable {
 
     private void spawnPlayers() {
         int i = 0;
+        ArrayList<Vector2> points = simulation.getPlayerSpawnPoints();
         for (ClientHandler c : clients.values()) {
             c.playerState.id = c.id;
-            c.playerState.x = simulation.playerSpawnPoints.get(i).x + 0.5f;
-            c.playerState.y = simulation.playerSpawnPoints.get(i).y + 0.5f;
-            c.playerState.color = new Color(MathUtils.random(), MathUtils.random(), MathUtils.random(), 1);
-            c.playerState.body = LoadUtillities.createPlayerBody(simulation.world, c.playerState.x, c.playerState.y, c.id);
+            c.playerState.x = points.get(i).x + 0.5f;
+            c.playerState.y = points.get(i).y + 0.5f;
+            c.playerState.body = LoadUtillities.createPlayerBody(simulation.getWorld(), c.playerState.x, c.playerState.y, c.id);
             i++;
         }
     }
@@ -445,8 +444,7 @@ public class GameServer implements Runnable {
         host = null;
         //clients.values().forEach(ClientHandler::disconnect);
         clients.clear();
-        simulation.players.clear();
-        simulation.projectiles.clear();
+        simulation.resetSimulation();
         serverState = ServerState.SHUTDOWN;
         try {
             serverSocket.close();

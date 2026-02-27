@@ -11,20 +11,38 @@ import java.util.Map;
 
 public class PhysicsSimulation {
 
-    public World world;
+    private World world;
+    public World getWorld() {return world;}
 
-    public Map<Integer, PlayerState> players;
-    public Map<Integer, ProjectileState> projectiles;
+    private Map<Integer, PlayerState> players;
+    public Map<Integer, PlayerState> getPlayers() {return players;}
+    private Map<Integer, ProjectileState> projectiles;
+    public Map<Integer, ProjectileState> getProjectiles() {return projectiles;}
 
-    public ArrayList<Wall> walls;
+    private ArrayList<Wall> walls;
+    public ArrayList<Wall> getWalls() {return walls;}
+    public void setWalls(ArrayList<Wall> walls) {this.walls = walls;}
+    private int[][] wallGrid;
+    public int[][] getWallGrid() {return wallGrid;}
+    public void setWallGrid(int[][] grid) {this.wallGrid = grid;}
 
-    public ArrayList<Vector2> playerSpawnPoints;
+    private ArrayList<Vector2> playerSpawnPoints;
+    public ArrayList<Vector2> getPlayerSpawnPoints() {return playerSpawnPoints;}
+    public void setPlayerSpawnPoints(ArrayList<Vector2> points) {this.playerSpawnPoints = points;}
 
     public PhysicsSimulation() {
         players = new HashMap<>();
         projectiles = new HashMap<>();
         walls = new ArrayList<>();
         playerSpawnPoints = new ArrayList<>();
+    }
+
+    public void resetSimulation() {
+        walls.clear();
+        wallGrid = null;
+        playerSpawnPoints.clear();
+        players.clear();
+        projectiles.clear();
     }
 
     public void step(float delta, int a, int b) {
@@ -52,15 +70,36 @@ public class PhysicsSimulation {
     }
 
     public PlayerState getPlayer(int id) {
+        System.out.println("HELLOOO!!");
+        printList();
         return players.get(id);
     }
 
-    public void clearWalls() {
-        walls.clear();
+    private void printList() {
+        for (PlayerState p : players.values()) {
+            System.out.print("["+p.id + "]: " + p.name + " is here!");
+        }
     }
 
-    private void clearPlayerSpawnPoints() {
-        playerSpawnPoints.clear();
+    public void addPlayer(PlayerState p) {
+        System.out.println("One player ADDEDD!!!");
+        players.put(p.id, p);
+    }
+
+    public void addProjectile(ProjectileState p) {
+        projectiles.put(p.id, p);
+    }
+
+    public void addProjectile(int id, ProjectileState p) {
+        projectiles.put(id, p);
+    }
+
+    public boolean containsProjectileKey(int id) {
+        return projectiles.containsKey(id);
+    }
+
+    public void destroyBody(Body body) {
+        world.destroyBody(body);
     }
 
     public void removePlayer(int id) {
@@ -77,9 +116,7 @@ public class PhysicsSimulation {
     }
 
     public void initPhysics() {
-        clearWalls();
-        clearPlayerSpawnPoints();
-
+        resetSimulation();
         world = new World(new Vector2(0, 0), true);
         world.setContactListener(new ContactListener() {
             @Override

@@ -37,11 +37,14 @@ public class GameScreen implements Screen, NetworkListener {
     private OrthographicCamera camera;
     private SpriteBatch batch;
     private Texture background;
+    private Texture wallTexture;
+    private Texture spawnTexture;
 
     private Viewport worldViewPort;
 
     private ShapeRenderer shapeRenderer = new ShapeRenderer();
 
+    private Label timeLabel;
     private Label coordinatesLabel;
     private Label chatLog;
     private ScrollPane chatScroll;
@@ -61,12 +64,12 @@ public class GameScreen implements Screen, NetworkListener {
     private WorldSnapshotMessage previousSnapshot;
     private WorldSnapshotMessage latestSnapshot;
 
-    static final float INTERPOLATION_DELAY = 0.15f; // 100 ms
+    static final float INTERPOLATION_DELAY = 0.15f;
 
     private float localTime;
 
     Map<Integer, PredictedProjectile> predictedProjectiles = new HashMap<>();
-
+    int[][] wallGrid;
 
     public GameScreen(LanPvpGame game) {
         this.game = game;
@@ -74,6 +77,7 @@ public class GameScreen implements Screen, NetworkListener {
         this.simulation = game.simulation;
         this.localPlayer = game.localPlayer;
         this.localTime = 0f;
+        this.wallGrid = simulation.getWallGrid();
     }
 
     @Override
@@ -82,25 +86,16 @@ public class GameScreen implements Screen, NetworkListener {
         stage = new Stage(new FitViewport(1280, 720));
         Gdx.input.setInputProcessor(stage);
 
-
-        //camera = new OrthographicCamera();
-        //camera.setToOrtho(false, game.viewport.getScreenWidth(), game.viewport.getScreenHeight());
-
-        shapeRenderer = new ShapeRenderer();
-        background = new Texture("grass_bg.png");
-
-        stage = new Stage(new ExtendViewport(Gdx.graphics.getWidth(), Gdx.graphics.getHeight()));
-        Gdx.input.setInputProcessor(stage);
-
         rootTable = new Table();
         rootTable.setFillParent(true);
+        rootTable.center();
         stage.addActor(rootTable);
 
-        rootTable.top().left().pad(10);
+
+        timeLabel = new Label("Time: 0.0s", game.uiSkin);
 
         coordinatesLabel = new Label("x: 0.0, y: 0.0", game.uiSkin);
         coordinatesLabel.setFontScale(1.5f);
-        rootTable.add(coordinatesLabel).top().left();
 
         chatLog = new Label("", game.uiSkin);
         chatLog.setWrap(true);
@@ -111,12 +106,31 @@ public class GameScreen implements Screen, NetworkListener {
         chatInput = new TextField("", game.uiSkin);
         chatInput.setVisible(false);
 
-        rootTable.bottom().left().pad(10);
-        rootTable.add(chatScroll).width(400).height(150).row();
-        rootTable.add(chatInput).width(400).height(30);
+
+        rootTable.add(coordinatesLabel).width(150).left();
+        rootTable.add(timeLabel).expandX().top();
+        rootTable.add(new Label("", game.uiSkin)).width(150);
+        rootTable.row().padTop(30).padBottom(50);
+
+        rootTable.add(new Label("", game.uiSkin));
+        rootTable.add(new Label("", game.uiSkin)).expand();
+        rootTable.add(new Label("", game.uiSkin));
+        rootTable.row();
+
+        rootTable.add(chatInput).width(400).height(30).left().bottom().padBottom(30);
+        rootTable.add(new Label("", game.uiSkin));
+        rootTable.add(chatScroll).width(400).height(150).right().bottom().padBottom(30);
+
+        //rootTable.setDebug(true);
+
+
+        shapeRenderer = new ShapeRenderer();
+        background = new Texture("grass_bg.png");
+        wallTexture = new Texture("tiles/wall.png");
+        spawnTexture = new Texture("tiles/spawn.png");
 
         int i = 0;
-        for (PlayerState ps : simulation.players.values()) {
+        for (PlayerState ps : simulation.getPlayers().values()) {
             playerSkins.put(i, new Texture("characters/p" + ps.playerIcon + ".png"));
             ballSkins.put(i, new Texture("balls/b" + ps.ballIcon + ".png"));
             i++;
@@ -131,6 +145,12 @@ public class GameScreen implements Screen, NetworkListener {
 
     @Override
     public void render(float delta) {
+
+        if (game.localPlayer == null) {
+            System.out.println("Local player ["+game.playerId+"] is null!");
+            game.localPlayer = simulation.getPlayer(game.playerId);
+            return;
+        }
 
         game.dispatchNetworkMessages();
 
@@ -171,10 +191,6 @@ public class GameScreen implements Screen, NetworkListener {
     private void handleProjectiles() {
         if (latestSnapshot == null || previousSnapshot == null) return;
 
-//        if (!latestSnapshot.projectiles.isEmpty()) {
-//            System.out.println("Proj: " + latestSnapshot.projectiles.get(0).x);
-//        }
-
         for (ProjectileSnapshot pss : latestSnapshot.projectiles) {
             if (pss.ownerId == localPlayer.id) {
 
@@ -184,69 +200,30 @@ public class GameScreen implements Screen, NetworkListener {
                     destroy(predicted.projectile);
 
                     ProjectileState proj = spawnProjectileFromSnapshot(pss);
-                    simulation.projectiles.put(pss.id, proj);
+                    simulation.addProjectile(pss.id, proj);
+                    //simulation.projectiles.put(pss.id, proj);
                     continue;
                 }
             }
 
-            if (!simulation.projectiles.containsKey(pss.id)) {
-                simulation.projectiles.put(pss.id, spawnProjectileFromSnapshot(pss));
+            if (!simulation.containsProjectileKey(pss.id)) {
+                simulation.addProjectile(pss.id, spawnProjectileFromSnapshot(pss));
             }
         }
-
-//        for (ProjectileSnapshot ps : latestSnapshot.projectiles) {
-//
-//            ProjectileState local = simulation.projectiles.get(ps.id);
-//            //System.out.println("ps.id: " + ps.id);
-//
-//            if (local == null) {
-//                local = spawnProjectile(simulation.getPlayer(ps.ownerId), ps.vx, ps.vy);
-//
-////                simulation.projectiles.put(p.id, p);
-////                SpawnProjectileMessage spm = new SpawnProjectileMessage();
-////                spm.ownerId = localPlayer.id;
-////                spm.fireSequence = nextProjectileId++;
-////                spm.dx = p.body.getLinearVelocity().x;
-////                spm.dy = p.body.getLinearVelocity().y;
-////                game.client.send(spm);
-//
-//                simulation.projectiles.put(ps.id, local);
-//            }
-//
-//            // Soft-correct position
-//            Vector2 pos = local.body.getPosition();
-//            float lerp = 0.25f;
-//
-//            local.body.setTransform(
-//                MathUtils.lerp(pos.x, ps.x, lerp),
-//                MathUtils.lerp(pos.y, ps.y, lerp),
-//                local.body.getAngle()
-//            );
-//        }
     }
 
     private void destroy(ProjectileState p) {
         if (p == null) return;
-
-        System.out.println("Destroyed");
-        // 1. Remove Box2D body
         if (p.body != null) {
-            simulation.world.destroyBody(p.body);
+            simulation.destroyBody(p.body);
             p.body = null;
         }
-
-        // 2. Remove from simulation collections
         predictedProjectiles.remove(p.id);
-        //simulation.projectiles.remove(p.id);
-
-        // 3. (Optional) clear other references
-        // e.g. predictedProjectiles map is handled elsewhere
     }
 
     private ProjectileState spawnProjectileFromSnapshot(ProjectileSnapshot ps) {
         System.out.println("Spawning official bullet!");
         ProjectileState proj = new ProjectileState();
-        //System.out.println("Spawn official bullet: x,y: (" + ps.x + "," + ps.y + ")");
         proj.id = ps.id;
         proj.ownerId = ps.ownerId;
         //System.out.println("[2]: Firing sequence: " + ps.fireSequence);
@@ -254,7 +231,7 @@ public class GameScreen implements Screen, NetworkListener {
         Vector2 spawnPos = new Vector2(ps.x, ps.y)
             .add(dir.scl(BULLET_SPAWN_OFFSET_M));
         proj.body = LoadUtillities.createProjectile(
-            simulation.world,
+            simulation.getWorld(),
             spawnPos.x,
             spawnPos.y,
             proj.id
@@ -262,7 +239,6 @@ public class GameScreen implements Screen, NetworkListener {
         proj.body.setLinearVelocity(
             dir.scl(BULLET_SPEED_MPS)
         );
-        //System.out.println("Spawned authoritative bullet at (" + spawnPos.x + "," + spawnPos.y + ")");
 
         return proj;
     }
@@ -279,7 +255,7 @@ public class GameScreen implements Screen, NetworkListener {
             ps.projectile.x = pos.x;
             ps.projectile.y = pos.y;
         }
-        for (ProjectileState ps : simulation.projectiles.values()) {
+        for (ProjectileState ps : simulation.getProjectiles().values()) {
             Vector2 pos = ps.body.getPosition();
             ps.x = pos.x;
             ps.y = pos.y;
@@ -370,15 +346,13 @@ public class GameScreen implements Screen, NetworkListener {
             pp.projectile = p;
             predictedProjectiles.put(pp.fireSequence, pp);
 
-
             SpawnProjectileMessage spm = new SpawnProjectileMessage();
             spm.ownerId = localPlayer.id;
             spm.fireSequence = pp.fireSequence;
             spm.dx = p.body.getLinearVelocity().x;
             spm.dy = p.body.getLinearVelocity().y;
             game.client.send(spm);
-            System.out.println("Bodies in world: " + simulation.world.getBodyCount());
-            //System.out.println("[1]: Firing sequence: " + pp.fireSequence);
+            System.out.println("Bodies in world: " + simulation.getWorld().getBodyCount());
         }
     }
 
@@ -393,7 +367,7 @@ public class GameScreen implements Screen, NetworkListener {
             .add(dir.scl(BULLET_SPAWN_OFFSET_M));
 
         p.body = LoadUtillities.createPredictedProjectile(
-            simulation.world,
+            simulation.getWorld(),
             spawnPos.x,
             spawnPos.y,
             p.id
@@ -402,8 +376,6 @@ public class GameScreen implements Screen, NetworkListener {
         p.body.setLinearVelocity(
             dir.scl(BULLET_SPEED_MPS)
         );
-
-        //System.out.println("Spawned local bullet at (" + spawnPos.x + "," + spawnPos.y + ")");
 
         return p;
     }
@@ -419,7 +391,7 @@ public class GameScreen implements Screen, NetworkListener {
             .add(dir.scl(BULLET_SPAWN_OFFSET_M));
 
         proj.body = LoadUtillities.createProjectile(
-            simulation.world,
+            simulation.getWorld(),
             spawnPos.x,
             spawnPos.y,
             proj.id
@@ -428,8 +400,6 @@ public class GameScreen implements Screen, NetworkListener {
         proj.body.setLinearVelocity(
             dir.scl(BULLET_SPEED_MPS)
         );
-
-        System.out.println("Spawned bullet at (" + spawnPos.x + "," + spawnPos.y + ")");
 
         return proj;
     }
@@ -445,10 +415,7 @@ public class GameScreen implements Screen, NetworkListener {
         if (localPlayer != null) {
             float x = Constants.metersToPx(localPlayer.x);
             float y = Constants.metersToPx(localPlayer.y);
-            //camera.position.set(x, y, 0);
-            //camera.update();
             OrthographicCamera cam = (OrthographicCamera) worldViewPort.getCamera();
-
             cam.position.set(x, y, 0);
         }
     }
@@ -456,6 +423,7 @@ public class GameScreen implements Screen, NetworkListener {
     private void localLogic() {
         moveCameraToPlayer();
         updateCoordinateLabel();
+        updateTimeLabel();
     }
 
     private void handlePlayerReconciliation() {
@@ -489,7 +457,6 @@ public class GameScreen implements Screen, NetworkListener {
         if (latestSnapshot.serverTime <= previousSnapshot.serverTime) return;
 
         float renderTime = localTime - INTERPOLATION_DELAY;
-
         float span = latestSnapshot.serverTime - previousSnapshot.serverTime;
 
         if (span <= 0f) return;
@@ -497,7 +464,7 @@ public class GameScreen implements Screen, NetworkListener {
         float t = (renderTime - previousSnapshot.serverTime) / span;
         t = MathUtils.clamp(t, 0f, 1f);
 
-        for (PlayerState ps : simulation.players.values()) {
+        for (PlayerState ps : simulation.getPlayers().values()) {
             if (ps.id == localPlayer.id) continue;
 
             PlayerSnapshot p0 = previousSnapshot.players.get(ps.id);
@@ -514,55 +481,44 @@ public class GameScreen implements Screen, NetworkListener {
         coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", localPlayer.x, localPlayer.y));
     }
 
-    float xPx, yPx, sizePx, half;
+    private void updateTimeLabel() {
+        timeLabel.setText(String.format("Time: %.1f", localTime));
+    }
+
     private void draw() {
         //ScreenUtils.clear(Color.BLACK);
 
-        Gdx.gl.glClearColor(0, 0, 0, 1);
+        Gdx.gl.glClearColor(0.2f, 0.15f, 0.2f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         worldViewPort.apply();
         batch.setProjectionMatrix(worldViewPort.getCamera().combined);
 
         batch.begin();
-        batch.draw(background, 0, 0, worldViewPort.getWorldWidth(), worldViewPort.getWorldHeight());
-        for (PlayerState p : simulation.players.values()) {
+        batch.draw(background, PIXELS_PER_METER/2, PIXELS_PER_METER/2, (game.worldWidth-1) * PIXELS_PER_METER, (game.worldHeight-1) * PIXELS_PER_METER);
+        for (int i = 0; i < wallGrid.length; i++) {
+            for (int j = 0; j < wallGrid[0].length; j++) {
+                int w = wallGrid[i][j];
+                if (w == 1) {
+                    batch.draw(wallTexture, PIXELS_PER_METER * j, PIXELS_PER_METER * i, PIXELS_PER_METER, PIXELS_PER_METER);
+                    continue;
+                }
+                if (w == 0) {
+                    continue;
+                }
+                if (w == 2) {
+                    batch.draw(spawnTexture, PIXELS_PER_METER * j, PIXELS_PER_METER * i, PIXELS_PER_METER, PIXELS_PER_METER);
+                }
+            }
+        }
+        for (PlayerState p : simulation.getPlayers().values()) {
             batch.draw(playerSkins.get(p.id), Constants.metersToPx(p.x) - PLAYER_RADIUS_PX, Constants.metersToPx(p.y) - PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2);
         }
-        for (ProjectileState p : simulation.projectiles.values()) {
-//            float x = Constants.metersToPx(p.x) - BULLET_RADIUS_PX;
-//            float y = Constants.metersToPx(p.y) - BULLET_RADIUS_PX;
-//            System.out.println("x,y: (" + x + "," + y + ")");
-//            batch.draw(ballSkins.get(p.ownerId), x, y, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
+        for (ProjectileState p : simulation.getProjectiles().values()) {
             batch.draw(ballSkins.get(p.ownerId), Constants.metersToPx(p.x) - BULLET_RADIUS_PX, Constants.metersToPx(p.y) - BULLET_RADIUS_PX, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
         }
         batch.end();
-
-        shapeRenderer.setProjectionMatrix(worldViewPort.getCamera().combined);
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        shapeRenderer.setColor(Color.BROWN);
-        for (Wall w : simulation.walls) {
-            float wx = Constants.metersToPx(w.x);
-            float wy = Constants.metersToPx(w.y);
-            float ww = Constants.metersToPx(w.width);
-            float wh = Constants.metersToPx(w.height);
-            shapeRenderer.rect(
-                wx - ww / 2f,
-                wy - wh / 2f,
-                ww,
-                wh
-            );
-        }
-//        for (PlayerState p : simulation.players.values()) {
-//            shapeRenderer.setColor(p.color);
-//            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), PLAYER_RADIUS_PX);
-//        }
-//        shapeRenderer.setColor(Color.YELLOW);
-//        for (ProjectileState p : simulation.projectiles.values()) {
-//            shapeRenderer.circle(Constants.metersToPx(p.x), Constants.metersToPx(p.y), BULLET_RADIUS_PX);
-//        }
-        shapeRenderer.end();
-        drawGrid();
+        //drawGrid();
     }
 
     private void drawGrid() {
@@ -578,7 +534,6 @@ public class GameScreen implements Screen, NetworkListener {
 
     @Override
     public void resize(int width, int height) {
-        //game.viewport.update(width, height);
         worldViewPort.update(width, height, true);
         stage.getViewport().update(width, height, true);
     }

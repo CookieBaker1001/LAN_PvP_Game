@@ -41,16 +41,11 @@ public class LanPvpGame extends Game {
     public void create() {
         username = "UNNAMED-" + (int)(Math.random() * 100000);
         //playerIcon = (int) (Math.random() * skinCount);
-        worldWidth = Gdx.graphics.getWidth();
-        worldHeight = Gdx.graphics.getHeight();
+        worldWidth = 0;
+        worldHeight = 0;
         batch = new SpriteBatch();
 
         uiSkin = new Skin(Gdx.files.internal("ui/clean-crispy/clean-crispy-ui.json"));
-
-        //viewport = new FitViewport(8, 5);
-        //viewport = new FitViewport(worldWidth, worldHeight);
-
-        this.simulation = new PhysicsSimulation();
 
         this.setScreen(new MainMenuScreen(this));
     }

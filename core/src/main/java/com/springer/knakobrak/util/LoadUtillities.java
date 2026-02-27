@@ -31,6 +31,9 @@ public class LoadUtillities {
         fd.filter.categoryBits = CollisionBits.PLAYER;
         fd.filter.maskBits = CollisionBits.BULLET | CollisionBits.PLAYER;
 
+//        fd.filter.categoryBits = (short) 0xFFFF;
+//        fd.filter.maskBits = (short) 0xFFFF;
+
         body.setFixedRotation(true);
 
         Fixture f = body.createFixture(fd);
@@ -63,7 +66,10 @@ public class LoadUtillities {
         fd.filter.categoryBits = CollisionBits.BULLET;
         fd.filter.maskBits = CollisionBits.PLAYER | CollisionBits.BULLET;
 
-        fd.isSensor = true;
+//        fd.filter.categoryBits = (short) 0xFFFF;
+//        fd.filter.maskBits = (short) 0xFFFF;
+
+        //fd.isSensor = true;
 
         Fixture f = body.createFixture(fd);
         f.setUserData(projId);
@@ -94,6 +100,9 @@ public class LoadUtillities {
 
         fd.filter.categoryBits = CollisionBits.PREDICTED;
         fd.filter.maskBits = 0;
+
+//        fd.filter.categoryBits = (short) 0xFFFF;
+//        fd.filter.maskBits = (short) 0xFFFF;
 
         //fd.isSensor = true;
 
@@ -143,32 +152,6 @@ public class LoadUtillities {
         wall.height = h;
         wall.width = w;
         return wall;
-    }
-
-    public static Body createTestBox(World world) {
-        BodyDef bd = new BodyDef();
-        bd.type = BodyDef.BodyType.StaticBody;
-
-        // position is CENTER of the box, in meters
-        bd.position.set(2f + 0.5f, 2f + 0.5f);
-
-        Body body = world.createBody(bd);
-
-        PolygonShape shape = new PolygonShape();
-
-        // setAsBox takes HALF-width and HALF-height (meters)
-        shape.setAsBox(0.5f, 0.5f); // 1m × 1m total
-
-        FixtureDef fd = new FixtureDef();
-        fd.shape = shape;
-        fd.density = 0f;
-        fd.friction = 0f;
-        fd.restitution = 0f;
-
-        body.createFixture(fd);
-        shape.dispose();
-
-        return body;
     }
 
     public static int[][] loadLevel(String path) throws IOException {

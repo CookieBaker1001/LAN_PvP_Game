@@ -20,6 +20,7 @@ import com.springer.knakobrak.local.SkinSelector;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
 import com.springer.knakobrak.net.messages.JoinMessage;
+import com.springer.knakobrak.world.PhysicsSimulation;
 
 import java.io.IOException;
 
@@ -37,11 +38,14 @@ public class MainMenuScreen implements Screen {
     public MainMenuScreen(LanPvpGame game) {
         this.game = game;
         this.background = new Texture("great_war.png");
+        if (game.simulation != null) {
+            game.simulation.resetSimulation();
+        }
+        else game.simulation = new PhysicsSimulation();
     }
 
     @Override
     public void show() {
-        //stage = new Stage(new ExtendViewport(Gdx.graphics.getWidth(), Gdx.graphics.getHeight()));
         worldViewPort = new FitViewport(1280, 720);
         stage = new Stage(new FitViewport(1280, 720));
         Gdx.input.setInputProcessor(stage);
@@ -50,7 +54,6 @@ public class MainMenuScreen implements Screen {
         root.setFillParent(true);
         root.center();
         stage.addActor(root);
-
 
 
         skinAtlas = new TextureAtlas("skins/character_skins.atlas");
@@ -188,7 +191,6 @@ public class MainMenuScreen implements Screen {
 
     @Override
     public void resize(int width, int height) {
-        //game.viewport.update(width, height);
         worldViewPort.update(width, height, true);
         stage.getViewport().update(width, height, true);
     }

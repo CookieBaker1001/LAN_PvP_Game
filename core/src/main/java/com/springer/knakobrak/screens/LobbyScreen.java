@@ -110,10 +110,6 @@ public class LobbyScreen implements Screen, NetworkListener {
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        //game.viewport.apply();
-        //game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
-
-
         worldViewPort.apply();
         game.batch.setProjectionMatrix(worldViewPort.getCamera().combined);
 
@@ -134,7 +130,6 @@ public class LobbyScreen implements Screen, NetworkListener {
     }
 
     @Override public void resize(int width, int height) {
-        //game.viewport.update(width, height);
         worldViewPort.update(width, height, true);
         stage.getViewport().update(width, height, true);
     }

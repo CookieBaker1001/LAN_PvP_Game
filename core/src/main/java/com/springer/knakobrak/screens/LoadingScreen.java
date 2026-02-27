@@ -48,9 +48,6 @@ public class LoadingScreen implements Screen, NetworkListener {
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        //game.viewport.apply();
-        //game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
-
         worldViewPort.apply();
         game.batch.setProjectionMatrix(worldViewPort.getCamera().combined);
 
@@ -82,7 +79,9 @@ public class LoadingScreen implements Screen, NetworkListener {
 
     private boolean playersDataReceived = false;
     private void receivePlayerData(InitPlayersMessage msg) {
+        System.out.println("11111");
         for (PlayerStateDTO p : msg.players) {
+            System.out.println("22222");
             PlayerState ps = new PlayerState();
             ps.id = p.id;
             ps.name = p.name;
@@ -90,9 +89,9 @@ public class LoadingScreen implements Screen, NetworkListener {
             ps.ballIcon = p.ballIcon;
             ps.x = p.x;
             ps.y = p.y;
-            ps.color = new Color(p.r, p.g, p.b, 1.0f);
-            ps.body = LoadUtillities.createPlayerBody(game.simulation.world,  p.x, p.y, p.id);
-            game.simulation.players.put(ps.id, ps);
+            ps.body = LoadUtillities.createPlayerBody(game.simulation.getWorld(),  p.x, p.y, p.id);
+            game.simulation.addPlayer(ps);
+            //game.simulation.players.put(ps.id, ps);
             if (ps.id == game.playerId){
                 game.localPlayer = ps;
             }
@@ -103,23 +102,31 @@ public class LoadingScreen implements Screen, NetworkListener {
 
     private boolean worldDataReceived = false;
     private void receiveWorldData(InitWorldMessage msg) {
-        game.simulation.clearWalls();
-        game.simulation.playerSpawnPoints = msg.spawnPoints;
+        game.simulation.setPlayerSpawnPoints(msg.spawnPoints);
         for (WallDTO wDTO : msg.walls) {
             Wall w = new Wall();
             w.x = wDTO.x;
             w.y = wDTO.y;
             w.width = wDTO.width;
             w.height = wDTO.height;
-            w.body = LoadUtillities.createWall(game.simulation.world, w.x, w.y, (int)w.height, (int)w.width);
+            w.body = LoadUtillities.createWall(game.simulation.getWorld(), w.x, w.y, (int)w.height, (int)w.width);
             game.simulation.addWall(w);
         }
         worldDataReceived = true;
+        System.out.println("Received wall bits!");
+        game.simulation.setWallGrid(msg.wallBits);
+        for (int[] row : game.simulation.getWallGrid()) {
+            for (int w : row) {
+                System.out.print(w);
+            }
+            System.out.println();
+        }
+        game.worldHeight = game.simulation.getWallGrid().length;
+        game.worldWidth = game.simulation.getWallGrid()[0].length;
     }
 
     @Override
     public void resize(int width, int height) {
-        //game.viewport.update(width, height);
         worldViewPort.update(width, height, true);
         stage.getViewport().update(width, height, true);
     }

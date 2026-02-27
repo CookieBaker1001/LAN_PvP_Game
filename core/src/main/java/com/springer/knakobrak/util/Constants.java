@@ -17,10 +17,6 @@ public final class Constants {
         return m * PIXELS_PER_METER;
     }
 
-//    public static int metersToPx(int m) {
-//        return m * (int) PIXELS_PER_METER;
-//    }
-
 
     public static final float PLAYER_RADIUS_PX = 20f;
     public static final float BULLET_RADIUS_PX = 12f;
