@@ -40,7 +40,7 @@ public class LoadUtillities {
         f.setUserData(playerId);
 
         Filter f2 = f.getFilterData();
-        System.out.println("Player fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
+        //System.out.println("Player fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
 
         shape.dispose();
         return body;
@@ -75,7 +75,7 @@ public class LoadUtillities {
         f.setUserData(projId);
 
         Filter f2 = f.getFilterData();
-        System.out.println("Projectile fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
+        //System.out.println("Projectile fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
 
         shape.dispose();
         return body;
@@ -110,7 +110,7 @@ public class LoadUtillities {
         f.setUserData(projId);
 
         Filter f2 = f.getFilterData();
-        System.out.println("Predicted projectile fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
+        //System.out.println("Predicted projectile fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
 
         shape.dispose();
         return body;
