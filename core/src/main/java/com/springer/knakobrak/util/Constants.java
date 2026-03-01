@@ -7,6 +7,9 @@ public final class Constants {
     public static final float PIXELS_PER_METER = 50f;// pixels per meter
 
     public static int MAX_HEALTH = 5;
+    public static float DEATH_DURATION = 5f;
+    public static float THROW_SPEED = 3f;
+    public static float INVINCIBILITY_WINDOW = 1f;
 
     public static float pxToMeters(float px) {
         return px / PIXELS_PER_METER;
@@ -27,8 +30,8 @@ public final class Constants {
         BULLET_RADIUS_PX / PIXELS_PER_METER;
 
 
-    public static final float PLAYER_SPEED_MPS = 3.0f;
-    public static final float BULLET_SPEED_MPS = 7.0f;
+    public static final float PLAYER_SPEED_MPS = 4.0f;
+    public static final float BULLET_SPEED_MPS = 9.0f;
 
 
     public static final float COLLISION_DISTANCE_M =

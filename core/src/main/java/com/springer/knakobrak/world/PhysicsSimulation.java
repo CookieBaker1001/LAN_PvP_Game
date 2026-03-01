@@ -2,14 +2,11 @@ package com.springer.knakobrak.world;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
-import com.badlogic.gdx.scenes.scene2d.Event;
 import com.springer.knakobrak.screens.PhysicsSimulationOwner;
 import com.springer.knakobrak.util.CollisionBits;
+import static com.springer.knakobrak.util.Constants.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 public class PhysicsSimulation {
 
@@ -71,9 +68,29 @@ public class PhysicsSimulation {
             Body body = ps.body;
             if (body == null) continue;
             ps.lifeTime += delta;
-            if (ps.lifeTime >= ps.lifeTimeLimit || Math.abs(ps.x) > 500 || Math.abs(ps.y) > 500) {
+            if (ps.lifeTime >= ps.lifeTimeLimit || !ps.isAlive || Math.abs(ps.x) > 500 || Math.abs(ps.y) > 500) {
+                //System.out.println("ps.isAlive: " + ps.isAlive);
                 world.destroyBody(body);
                 it.remove();
+            }
+        }
+
+        for (PlayerState p : players.values()) {
+            if (p.isInvincible) {
+                p.invincibilityTimer += delta;
+                if (p.invincibilityTimer >= INVINCIBILITY_WINDOW) {
+                    p.isInvincible = false;
+                    p.invincibilityTimer = 0f;
+                }
+            }
+            if (p.isDead) {
+                p.deathTimer += delta;
+                if (p.deathTimer >= DEATH_DURATION) {
+                    p.isDead = false;
+                    p.deathTimer = 0f;
+                    p.resurrect();
+                    p.hp = MAX_HEALTH;
+                }
             }
         }
     }
@@ -131,12 +148,13 @@ public class PhysicsSimulation {
                 Fixture a = contact.getFixtureA();
                 Fixture b = contact.getFixtureB();
                 if (isPredicted(a) || isPredicted(b)) {
-                    //System.out.println("NOPE!!");
                     return;
                 }
+                //System.out.println("a.class: " + a.getClass() + ", b.class: " + b.getClass());
 
                 Object a2 = a.getUserData();
                 Object b2 = b.getUserData();
+                //System.out.println("a2: " + a2 + ", b2: " + b2);
                 handleCollision(a2, b2);
             }
 
@@ -172,10 +190,21 @@ public class PhysicsSimulation {
     }
 
     void hitPlayer(int playerId, int projectileId) {
+        ProjectileState ps = projectiles.get(projectileId);
+        //System.out.println("Player [" + playerId + "] got hit by bullet [" + projectileId + "]");
         players.values().forEach(player -> {
             if (player.id == playerId) {
+                if (player.isDead) return;
+                ps.isAlive = false;
                 player.hp--;
-                if (owner != null) owner.onTakeDamage(player.id);
+                if (player.hp <= 0) {
+                    player.isDead = true;
+                    player.isInvincible = true;
+                    Random r = new Random();
+                    player.nextSpawnPoint = playerSpawnPoints.get(r.nextInt(0, playerSpawnPoints.size()));
+                    System.out.println("I've generated this new spawnPoint: (" + player.nextSpawnPoint.x + "," + player.nextSpawnPoint.y + ")");
+                }
+                if (owner != null) owner.onTakeDamage(player.id, projectileId);
                 //System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
             }
         });

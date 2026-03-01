@@ -38,7 +38,7 @@ public class LobbyScreen implements Screen, NetworkListener {
         this.game = game;
         this.simulation = game.simulation;
         this.isHost = isHost;
-        this.background = new Texture("final_frontier.jpg");
+        this.background = new Texture("misc/final_frontier.jpg");
     }
 
     @Override

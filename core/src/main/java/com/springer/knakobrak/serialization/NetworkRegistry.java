@@ -8,10 +8,8 @@ import com.springer.knakobrak.dto.WallDTO;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.world.PlayerSnapshot;
 import com.springer.knakobrak.world.ProjectileSnapshot;
-import com.springer.knakobrak.world.ProjectileState;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 
 public final class NetworkRegistry {
 
@@ -34,6 +32,7 @@ public final class NetworkRegistry {
         kryo.register(PlayerSnapshotMessage.class);
         kryo.register(SpawnProjectileMessage.class);
         kryo.register(PlayerHealthMessage.class);
+        kryo.register(PlayerDeathMessage.class);
         kryo.register(DisconnectMessage.class);
         kryo.register(WorldSnapshotMessage.class);
         kryo.register(ChatMessage.class);

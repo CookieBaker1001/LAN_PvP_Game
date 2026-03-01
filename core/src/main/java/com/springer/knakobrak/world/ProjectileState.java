@@ -10,6 +10,7 @@ public class ProjectileState {
     public Body body;
     public float lifeTime = 0f;
     public int lifeTimeLimit = 3; // milliseconds
+    public boolean locallyConsumed = true;
 
-    public boolean isAlive;
+    public boolean isAlive = true;
 }

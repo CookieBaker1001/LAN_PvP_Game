@@ -1,7 +1,5 @@
 package com.springer.knakobrak.net;
 
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.springer.knakobrak.dto.PlayerStateDTO;
 import com.springer.knakobrak.dto.WallDTO;
@@ -229,7 +227,6 @@ public class GameServer implements Runnable, PhysicsSimulationOwner {
         proj.id = nextProjectileId++;
         proj.ownerId = sender.id;
         proj.localPlayerFireSequence = spm.fireSequence;
-        proj.isAlive = true;
         Vector2 dir = new Vector2(dx, dy).nor();
         Vector2 spawnPos = sender.playerState.body.getPosition()
             .cpy()
@@ -400,6 +397,10 @@ public class GameServer implements Runnable, PhysicsSimulationOwner {
         });
     }
 
+    private void send(ClientHandler c, NetMessage msg) {
+        c.send(msg);
+    }
+
     private void broadcastGameState() {
         WorldSnapshotMessage wsm = new WorldSnapshotMessage();
         wsm.players = new ArrayList<>();
@@ -417,6 +418,7 @@ public class GameServer implements Runnable, PhysicsSimulationOwner {
             snap.id = ps.id;
             snap.ownerId = ps.ownerId;
             snap.fireSequence = ps.localPlayerFireSequence;
+            snap.x = ps.x;
             snap.x = ps.x;
             snap.y = ps.y;
             snap.vx = ps.body.getLinearVelocity().x;
@@ -456,10 +458,20 @@ public class GameServer implements Runnable, PhysicsSimulationOwner {
     }
 
     @Override
-    public void onTakeDamage(int id) {
+    public void onTakeDamage(int playerId, int projectileId) {
         PlayerHealthMessage phm = new PlayerHealthMessage();
-        phm.playerId = id;
-        phm.hp = simulation.getPlayer(id).hp;
+        PlayerState p = simulation.getPlayer(playerId);
+        phm.playerId = playerId;
+        phm.hp = p.hp;
         broadcast(phm);
+        if (p.hp <= 0) {
+            System.out.println("This guy should be dead!");
+            p.isInvincible = true;
+            p.deathTimer = 0f;
+            PlayerDeathMessage dm = new PlayerDeathMessage();
+            dm.nextSpawnPointX = p.nextSpawnPoint.x;
+            dm.nextSpawnPointY = p.nextSpawnPoint.y;
+            send(clients.get(playerId), dm);
+        }
     }
 }

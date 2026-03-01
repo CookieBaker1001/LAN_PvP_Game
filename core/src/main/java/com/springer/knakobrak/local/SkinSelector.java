@@ -12,6 +12,7 @@ public class SkinSelector {
 
     private final Array<Drawable> skins;
     private int currentIndex = 0;
+    private int skinArraySize;
 
     private Image previewImage;
     private Table root;
@@ -21,6 +22,7 @@ public class SkinSelector {
 
         previewImage = new Image(skins.first());
         previewImage.setScaling(Scaling.fit);
+        skinArraySize = (type == 1) ? availableSkins.size-1 : availableSkins.size;
 
         TextButton prevSkinBtn = new TextButton("<", uiSkin);
         TextButton nextSkinBtn = new TextButton(">", uiSkin);
@@ -55,13 +57,13 @@ public class SkinSelector {
 
     private void previous() {
         currentIndex--;
-        if (currentIndex < 0) currentIndex += skins.size;
+        if (currentIndex < 0) currentIndex += skinArraySize;
         updatePreview();
     }
 
     private void next() {
         currentIndex++;
-        if (currentIndex >= skins.size) currentIndex -= skins.size;
+        if (currentIndex >= skinArraySize) currentIndex -= skinArraySize;
         updatePreview();
     }
 
