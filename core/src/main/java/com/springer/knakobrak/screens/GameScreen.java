@@ -30,7 +30,7 @@ import java.util.Map;
 
 import static com.springer.knakobrak.util.Constants.*;
 
-public class GameScreen implements Screen, NetworkListener {
+public class GameScreen implements Screen, NetworkListener, PhysicsSimulationOwner {
 
     private final LanPvpGame game;
     private Stage stage;
@@ -92,6 +92,8 @@ public class GameScreen implements Screen, NetworkListener {
         this.localPlayer = game.localPlayer;
         this.localTime = 0f;
         this.wallGrid = simulation.getWallGrid();
+        //game.soundManager.playMusic("game", true);
+        simulation.setSimulationOwner(this);
     }
 
     @Override
@@ -118,7 +120,7 @@ public class GameScreen implements Screen, NetworkListener {
         coordinatesLabel = new Label("x: 0.0, y: 0.0", game.uiSkin);
         coordinatesLabel.setFontScale(1.5f);
         timeLabel = new Label("Time: 0.0s", game.uiSkin);
-        heartTable = createHealthBar(5, heartTexture);
+        heartTable = createHealthBar(MAX_HEALTH, heartTexture);
 
         Table topBar = new Table();
         topBar.add(coordinatesLabel).left().expandX();
@@ -133,7 +135,7 @@ public class GameScreen implements Screen, NetworkListener {
         middle.center();
 
         Table pauseMenu = createPauseMenu();
-        middle.add(pauseMenu);
+        middle.add(pauseMenu).expand().fill().pad(50);
 
         rootTable.add(middle).expand().fill();
         rootTable.row();
@@ -181,11 +183,10 @@ public class GameScreen implements Screen, NetworkListener {
         pauseTable.setBackground(createDimBackground());
 
         Label pausedLabel = new Label("Paused!", game.uiSkin);
-        pausedLabel.setFontScale(1.5f);
+        pausedLabel.setFontScale(5f);
 
         pauseTable.add(pausedLabel).center();
 
-        pauseTable.setSize(300, 200);
         pauseTable.setVisible(false);
 
         return pauseTable;
@@ -680,14 +681,32 @@ public class GameScreen implements Screen, NetworkListener {
         });
     }
 
+    private void handlePlayerHealthMessage(PlayerHealthMessage phm) {
+        if (phm.playerId == localPlayer.id) {
+            localPlayer.hp = phm.hp;
+            updateHealth(localPlayer.hp);
+        } else {
+            simulation.getPlayer(phm.playerId).hp--;
+        }
+    }
+
     @Override
     public void handleNetworkMessage(NetMessage msg) {
         if (msg instanceof WorldSnapshotMessage) {
             handleWorldSnapshot((WorldSnapshotMessage) msg);
         } else if (msg instanceof ChatMessage) {
             addChatMessage((ChatMessage) msg);
+        } else if (msg instanceof PlayerHealthMessage) {
+            handlePlayerHealthMessage((PlayerHealthMessage) msg);
         } else {
             System.out.println("Unknown message type... " + msg.getClass());
+        }
+    }
+
+    @Override
+    public void onTakeDamage(int id) {
+        if (id == localPlayer.id) {
+            updateHealth(localPlayer.hp);
         }
     }
 }

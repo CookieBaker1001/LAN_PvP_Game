@@ -5,7 +5,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.springer.knakobrak.local.SoundManager;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
 import com.springer.knakobrak.net.NetworkListener;
@@ -16,6 +16,8 @@ import com.springer.knakobrak.world.PlayerState;
 
 
 public class LanPvpGame extends Game {
+
+    public SoundManager soundManager;
     public SpriteBatch batch;
     public Skin uiSkin;
 
@@ -39,6 +41,8 @@ public class LanPvpGame extends Game {
 
     @Override
     public void create() {
+        soundManager = new SoundManager();
+        soundManager.loadMusic("game", "sounds/action1.mp3");
         username = "UNNAMED-" + (int)(Math.random() * 100000);
         //playerIcon = (int) (Math.random() * skinCount);
         worldWidth = 0;
@@ -74,8 +78,9 @@ public class LanPvpGame extends Game {
 
     @Override
     public void dispose() {
-        batch.dispose();
         super.dispose();
+        batch.dispose();
+        soundManager.dispose();
     }
 
     public void cleanupNetworking() {

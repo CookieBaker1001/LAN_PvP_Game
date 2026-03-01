@@ -6,6 +6,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.springer.knakobrak.dto.PlayerStateDTO;
 import com.springer.knakobrak.dto.WallDTO;
 import com.springer.knakobrak.net.messages.*;
+import com.springer.knakobrak.screens.PhysicsSimulationOwner;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.*;
 import com.badlogic.gdx.physics.box2d.*;
@@ -21,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.springer.knakobrak.util.Constants.*;
 
-public class GameServer implements Runnable {
+public class GameServer implements Runnable, PhysicsSimulationOwner {
 
     private ServerSocket serverSocket;
     private Thread gameLoopThread;
@@ -44,7 +45,7 @@ public class GameServer implements Runnable {
         this.port = port;
         this.running = true;
         this.serverSocket = new ServerSocket(port);
-        this.simulation = new PhysicsSimulation();
+        this.simulation = new PhysicsSimulation(this);
         this.simulation.initPhysics();
         this.serverTime = 0f;
     }
@@ -452,5 +453,13 @@ public class GameServer implements Runnable {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    @Override
+    public void onTakeDamage(int id) {
+        PlayerHealthMessage phm = new PlayerHealthMessage();
+        phm.playerId = id;
+        phm.hp = simulation.getPlayer(id).hp;
+        broadcast(phm);
     }
 }

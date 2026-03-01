@@ -33,6 +33,7 @@ public final class NetworkRegistry {
         kryo.register(PlayerInputMessage.class);
         kryo.register(PlayerSnapshotMessage.class);
         kryo.register(SpawnProjectileMessage.class);
+        kryo.register(PlayerHealthMessage.class);
         kryo.register(DisconnectMessage.class);
         kryo.register(WorldSnapshotMessage.class);
         kryo.register(ChatMessage.class);

@@ -2,6 +2,8 @@ package com.springer.knakobrak.world;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
+import com.badlogic.gdx.scenes.scene2d.Event;
+import com.springer.knakobrak.screens.PhysicsSimulationOwner;
 import com.springer.knakobrak.util.CollisionBits;
 
 import java.util.ArrayList;
@@ -10,6 +12,8 @@ import java.util.Iterator;
 import java.util.Map;
 
 public class PhysicsSimulation {
+
+    private PhysicsSimulationOwner owner;
 
     private World world;
     public World getWorld() {return world;}
@@ -30,11 +34,16 @@ public class PhysicsSimulation {
     public ArrayList<Vector2> getPlayerSpawnPoints() {return playerSpawnPoints;}
     public void setPlayerSpawnPoints(ArrayList<Vector2> points) {this.playerSpawnPoints = points;}
 
-    public PhysicsSimulation() {
+    public PhysicsSimulation(PhysicsSimulationOwner owner) {
+        this.owner = owner;
         players = new HashMap<>();
         projectiles = new HashMap<>();
         walls = new ArrayList<>();
         playerSpawnPoints = new ArrayList<>();
+    }
+
+    public void setSimulationOwner(PhysicsSimulationOwner owner) {
+        this.owner = owner;
     }
 
     public void resetSimulation() {
@@ -70,8 +79,7 @@ public class PhysicsSimulation {
     }
 
     public PlayerState getPlayer(int id) {
-        System.out.println("HELLOOO!!");
-        printList();
+        //printList();
         return players.get(id);
     }
 
@@ -82,7 +90,6 @@ public class PhysicsSimulation {
     }
 
     public void addPlayer(PlayerState p) {
-        System.out.println("One player ADDEDD!!!");
         players.put(p.id, p);
     }
 
@@ -124,7 +131,7 @@ public class PhysicsSimulation {
                 Fixture a = contact.getFixtureA();
                 Fixture b = contact.getFixtureB();
                 if (isPredicted(a) || isPredicted(b)) {
-                    System.out.println("NOPE!!");
+                    //System.out.println("NOPE!!");
                     return;
                 }
 
@@ -168,6 +175,7 @@ public class PhysicsSimulation {
         players.values().forEach(player -> {
             if (player.id == playerId) {
                 player.hp--;
+                if (owner != null) owner.onTakeDamage(player.id);
                 //System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
             }
         });

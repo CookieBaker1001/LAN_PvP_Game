@@ -6,7 +6,7 @@ public final class Constants {
 
     public static final float PIXELS_PER_METER = 50f;// pixels per meter
 
-    public static int MAX_HEALTH;
+    public static int MAX_HEALTH = 5;
 
     public static float pxToMeters(float px) {
         return px / PIXELS_PER_METER;
