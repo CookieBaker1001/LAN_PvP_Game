@@ -10,8 +10,6 @@ import com.springer.knakobrak.world.PlayerState;
 import com.springer.knakobrak.world.ServerMessage;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.Socket;
 
 public class ClientHandler implements Runnable {

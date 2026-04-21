@@ -100,10 +100,23 @@ public class PhysicsSimulation {
         return players.get(id);
     }
 
-    private void printList() {
+    private void printPlayerList() {
         for (PlayerState p : players.values()) {
             System.out.print("["+p.id + "]: " + p.name + " is here!");
         }
+    }
+
+    int seconds = 0;
+    public void printProjectileList() {
+        System.out.print("[" + (++seconds) + "]: (");
+        if (projectiles.isEmpty()) System.out.print(" empty ");
+        else {
+            System.out.print(" ");
+            for (ProjectileState ps : projectiles.values()) {
+                System.out.print(ps.id + " ");
+            }
+        }
+        System.out.println("), size: " + projectiles.size());
     }
 
     public void addPlayer(PlayerState p) {

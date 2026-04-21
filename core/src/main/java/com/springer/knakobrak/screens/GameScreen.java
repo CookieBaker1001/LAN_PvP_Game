@@ -303,6 +303,7 @@ public class GameScreen implements Screen, NetworkListener, PhysicsSimulationOwn
         Vector2 pos = localPlayer.body.getPosition();
         localPlayer.x = pos.x;
         localPlayer.y = pos.y;
+        localPlayer.y = pos.y;
     }
 
     private void syncProjectileBodies() {
