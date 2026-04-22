@@ -5,7 +5,6 @@ import com.springer.knakobrak.net.gameServerHelpers.GameHelper;
 import com.springer.knakobrak.net.gameServerHelpers.LoadingHelper;
 import com.springer.knakobrak.net.gameServerHelpers.LobbyHelper;
 import com.springer.knakobrak.net.messages.*;
-import com.springer.knakobrak.screens.PhysicsSimulationOwner;
 import com.springer.knakobrak.world.*;
 
 import java.io.*;
@@ -17,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class GameServer implements Runnable, PhysicsSimulationOwner {
+public class GameServer implements Runnable {
 
     private LobbyHelper lobbyHelper;
     private LoadingHelper loadingHelper;
@@ -43,7 +42,7 @@ public class GameServer implements Runnable, PhysicsSimulationOwner {
         this.port = port;
         this.running = true;
         this.serverSocket = new ServerSocket(port);
-        this.simulation = new PhysicsSimulation(this);
+        this.simulation = new PhysicsSimulation();
         this.simulation.initPhysics();
         this.serverTime = 0f;
 
@@ -166,7 +165,7 @@ public class GameServer implements Runnable, PhysicsSimulationOwner {
     }
 
     private void doSomethingEverySecond() {
-        simulation.printProjectileList();
+        //simulation.printProjectileList();
     }
 
     private void syncBodiesToGameState() {
@@ -231,15 +230,13 @@ public class GameServer implements Runnable, PhysicsSimulationOwner {
         wsm.projectiles = new ArrayList<>();
         for (ProjectileState ps : simulation.getProjectiles().values()) {
             ProjectileSnapshot snap = new ProjectileSnapshot();
-            snap.id = ps.id;
-            snap.ownerId = ps.ownerId;
-            snap.fireSequence = ps.localPlayerFireSequence;
-            snap.x = ps.x;
+            snap.counter = ps.counter;
+            snap.ownerId = ps.clientId;
             snap.x = ps.x;
             snap.y = ps.y;
             snap.vx = ps.body.getLinearVelocity().x;
             snap.vy = ps.body.getLinearVelocity().y;
-            snap.alive = ps.isAlive;
+            snap.lifeTime = ps.lifeTime;
             wsm.projectiles.add(snap);
         }
         wsm.serverTime = this.serverTime;
@@ -261,21 +258,21 @@ public class GameServer implements Runnable, PhysicsSimulationOwner {
         }
     }
 
-    @Override
-    public void onTakeDamage(int playerId, int projectileId) {
-        PlayerHealthMessage phm = new PlayerHealthMessage();
-        PlayerState p = simulation.getPlayer(playerId);
-        phm.playerId = playerId;
-        phm.hp = p.hp;
-        broadcast(phm);
-        if (p.hp <= 0) {
-            System.out.println("This guy should be dead!");
-            p.isInvincible = true;
-            p.deathTimer = 0f;
-            PlayerDeathMessage dm = new PlayerDeathMessage();
-            dm.nextSpawnPointX = p.nextSpawnPoint.x;
-            dm.nextSpawnPointY = p.nextSpawnPoint.y;
-            send(clients.get(playerId), dm);
-        }
-    }
+//    @Override
+//    public void onTakeDamage(int playerId, int projectileId) {
+//        PlayerHealthMessage phm = new PlayerHealthMessage();
+//        PlayerState p = simulation.getPlayer(playerId);
+//        phm.playerId = playerId;
+//        phm.hp = p.hp;
+//        broadcast(phm);
+//        if (p.hp <= 0) {
+//            System.out.println("This guy should be dead!");
+//            p.isInvincible = true;
+//            p.deathTimer = 0f;
+//            PlayerDeathMessage dm = new PlayerDeathMessage();
+//            dm.nextSpawnPointX = p.nextSpawnPoint.x;
+//            dm.nextSpawnPointY = p.nextSpawnPoint.y;
+//            send(clients.get(playerId), dm);
+//        }
+//    }
 }

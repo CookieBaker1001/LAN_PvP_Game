@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.physics.box2d.Filter;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
@@ -78,9 +79,7 @@ public class LoadingScreen implements Screen, NetworkListener {
 
     private boolean playersDataReceived = false;
     private void receivePlayerData(InitPlayersMessage msg) {
-        System.out.println("11111");
         for (PlayerStateDTO p : msg.players) {
-            System.out.println("22222");
             PlayerState ps = new PlayerState();
             ps.id = p.id;
             ps.name = p.name;
@@ -89,6 +88,10 @@ public class LoadingScreen implements Screen, NetworkListener {
             ps.x = p.x;
             ps.y = p.y;
             ps.body = LoadUtillities.createPlayerBody(game.simulation.getWorld(),  p.x, p.y, p.id);
+
+//            Filter f = ps.body.getFixtureList().first().getFilterData();
+//            System.out.println("Client PLAYER: cat=" + f.categoryBits + " mask=" + f.maskBits);
+
             game.simulation.addPlayer(ps);
             //game.simulation.players.put(ps.id, ps);
             if (ps.id == game.playerId){

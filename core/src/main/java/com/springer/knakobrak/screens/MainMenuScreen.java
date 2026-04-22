@@ -40,7 +40,7 @@ public class MainMenuScreen implements Screen {
         if (game.simulation != null) {
             game.simulation.resetSimulation();
         }
-        else game.simulation = new PhysicsSimulation(null);
+        else game.simulation = new PhysicsSimulation();
     }
 
     @Override

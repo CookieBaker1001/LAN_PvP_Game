@@ -4,7 +4,7 @@ public class SpawnProjectileMessage extends NetMessage {
     // Sent from a client who just fired
 
     public int ownerId;
-    public int fireSequence;
+    public int counter;
     public float dx, dy;
 
     public SpawnProjectileMessage() {

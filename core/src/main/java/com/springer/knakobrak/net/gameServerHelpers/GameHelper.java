@@ -10,11 +10,11 @@ import com.springer.knakobrak.net.messages.PlayerInputMessage;
 import com.springer.knakobrak.net.messages.SpawnProjectileMessage;
 import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.PhysicsSimulation;
+import com.springer.knakobrak.world.ProjectileId;
 import com.springer.knakobrak.world.ProjectileState;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.springer.knakobrak.util.Constants.*;
 
@@ -28,6 +28,7 @@ public class GameHelper {
 
     public GameHelper(PhysicsSimulation simulation, Map<Integer, ClientHandler> clients) {
         this.simulation = simulation;
+        this.simulation.owner = "Server";
         this.clients = clients;
     }
 
@@ -61,9 +62,9 @@ public class GameHelper {
         float dx = spm.dx;
         float dy = spm.dy;
         ProjectileState proj = new ProjectileState();
-        proj.id = nextProjectileId++;
-        proj.ownerId = sender.id;
-        proj.localPlayerFireSequence = spm.fireSequence;
+        proj.clientId = spm.ownerId;
+        proj.counter = spm.counter;
+        //proj.localPlayerFireSequence = spm.fireSequence;
         Vector2 dir = new Vector2(dx, dy).nor();
         Vector2 spawnPos = sender.playerState.body.getPosition()
             .cpy()
@@ -72,12 +73,15 @@ public class GameHelper {
             simulation.getWorld(),
             spawnPos.x,
             spawnPos.y,
-            proj.id
+            proj.clientId,
+            proj.counter
         );
         proj.body.setLinearVelocity(
             dir.scl(BULLET_SPEED_MPS)
         );
-        simulation.addProjectile(proj);
+        ProjectileId newId = new ProjectileId(proj.clientId, proj.counter);
+        simulation.addProjectile(newId, proj);
+        //System.out.println("Spawning projectile " + newId);
         //simulation.projectiles.put(proj.id, proj);
     }
 

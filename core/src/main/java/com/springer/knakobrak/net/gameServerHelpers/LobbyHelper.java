@@ -1,6 +1,7 @@
 package com.springer.knakobrak.net.gameServerHelpers;
 
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.physics.box2d.Filter;
 import com.springer.knakobrak.dto.PlayerStateDTO;
 import com.springer.knakobrak.dto.WallDTO;
 import com.springer.knakobrak.net.ClientHandler;
@@ -177,6 +178,10 @@ public class LobbyHelper {
             c.playerState.x = points.get(i).x + 0.5f;
             c.playerState.y = points.get(i).y + 0.5f;
             c.playerState.body = LoadUtillities.createPlayerBody(simulation.getWorld(), c.playerState.x, c.playerState.y, c.id);
+
+//            Filter f = c.playerState.body.getFixtureList().first().getFilterData();
+//            System.out.println("Server: PLAYER: cat=" + f.categoryBits + " mask=" + f.maskBits);
+
             i++;
         }
     }

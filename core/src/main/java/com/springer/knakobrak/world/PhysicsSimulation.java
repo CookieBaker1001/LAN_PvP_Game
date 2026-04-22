@@ -2,23 +2,25 @@ package com.springer.knakobrak.world;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
-import com.springer.knakobrak.screens.PhysicsSimulationOwner;
 import com.springer.knakobrak.util.CollisionBits;
+import com.springer.knakobrak.util.ObjectType;
+import com.springer.knakobrak.util.PhysicsData;
+
 import static com.springer.knakobrak.util.Constants.*;
 
 import java.util.*;
 
 public class PhysicsSimulation {
 
-    private PhysicsSimulationOwner owner;
+    public String owner = "";
 
     private World world;
     public World getWorld() {return world;}
 
     private Map<Integer, PlayerState> players;
     public Map<Integer, PlayerState> getPlayers() {return players;}
-    private Map<Integer, ProjectileState> projectiles;
-    public Map<Integer, ProjectileState> getProjectiles() {return projectiles;}
+    private Map<ProjectileId, ProjectileState> projectiles;
+    public Map<ProjectileId, ProjectileState> getProjectiles() {return projectiles;}
 
     private ArrayList<Wall> walls;
     public ArrayList<Wall> getWalls() {return walls;}
@@ -31,16 +33,12 @@ public class PhysicsSimulation {
     public ArrayList<Vector2> getPlayerSpawnPoints() {return playerSpawnPoints;}
     public void setPlayerSpawnPoints(ArrayList<Vector2> points) {this.playerSpawnPoints = points;}
 
-    public PhysicsSimulation(PhysicsSimulationOwner owner) {
-        this.owner = owner;
+    public PhysicsSimulation() {
+        //this.owner = owner;
         players = new HashMap<>();
         projectiles = new HashMap<>();
         walls = new ArrayList<>();
         playerSpawnPoints = new ArrayList<>();
-    }
-
-    public void setSimulationOwner(PhysicsSimulationOwner owner) {
-        this.owner = owner;
     }
 
     public void resetSimulation() {
@@ -61,19 +59,37 @@ public class PhysicsSimulation {
         age(delta);
     }
 
+    private ProjectileState deadProjectile = null;
     private void age(float delta) {
-        Iterator<ProjectileState> it = projectiles.values().iterator();
-        while (it.hasNext()) {
-            ProjectileState ps = it.next();
+
+        for (ProjectileState ps : projectiles.values()) {
             Body body = ps.body;
             if (body == null) continue;
             ps.lifeTime += delta;
             if (ps.lifeTime >= ps.lifeTimeLimit || !ps.isAlive || Math.abs(ps.x) > 500 || Math.abs(ps.y) > 500) {
-                //System.out.println("ps.isAlive: " + ps.isAlive);
+                //System.out.println(owner + " ps.id: (" + ps.clientId + "," + ps.counter + "), ps.isAlive: " + ps.isAlive);
                 world.destroyBody(body);
-                it.remove();
+                deadProjectile = ps;
+                //break;
             }
         }
+        if (deadProjectile != null) {
+            //System.out.println(owner + ": An object has been removed!");
+            projectiles.remove(new ProjectileId(deadProjectile.clientId, deadProjectile.counter));
+            deadProjectile = null;
+        }
+//        Iterator<ProjectileState> it = projectiles.values().iterator();
+//        while (it.hasNext()) {
+//            ProjectileState ps = it.next();
+//            Body body = ps.body;
+//            if (body == null) continue;
+//            ps.lifeTime += delta;
+//            if (ps.lifeTime >= ps.lifeTimeLimit || !ps.isAlive || Math.abs(ps.x) > 500 || Math.abs(ps.y) > 500) {
+//                System.out.println("ps.id: " + ps.id + ", ps.isAlive: " + ps.isAlive);
+//                world.destroyBody(body);
+//                it.remove();
+//            }
+//        }
 
         for (PlayerState p : players.values()) {
             if (p.isInvincible) {
@@ -113,7 +129,7 @@ public class PhysicsSimulation {
         else {
             System.out.print(" ");
             for (ProjectileState ps : projectiles.values()) {
-                System.out.print(ps.id + " ");
+                System.out.print(ps.counter + " ");
             }
         }
         System.out.println("), size: " + projectiles.size());
@@ -123,15 +139,11 @@ public class PhysicsSimulation {
         players.put(p.id, p);
     }
 
-    public void addProjectile(ProjectileState p) {
-        projectiles.put(p.id, p);
-    }
-
-    public void addProjectile(int id, ProjectileState p) {
+    public void addProjectile(ProjectileId id, ProjectileState p) {
         projectiles.put(id, p);
     }
 
-    public boolean containsProjectileKey(int id) {
+    public boolean containsProjectileKey(ProjectileId id) {
         return projectiles.containsKey(id);
     }
 
@@ -160,15 +172,17 @@ public class PhysicsSimulation {
             public void beginContact(Contact contact) {
                 Fixture a = contact.getFixtureA();
                 Fixture b = contact.getFixtureB();
+
                 if (isPredicted(a) || isPredicted(b)) {
                     return;
                 }
-                //System.out.println("a.class: " + a.getClass() + ", b.class: " + b.getClass());
 
-                Object a2 = a.getUserData();
-                Object b2 = b.getUserData();
-                //System.out.println("a2: " + a2 + ", b2: " + b2);
-                handleCollision(a2, b2);
+                PhysicsData dataA = (PhysicsData) a.getUserData();
+                PhysicsData dataB = (PhysicsData) b.getUserData();
+
+                if (dataA == null || dataB == null) return;
+
+                handleCollision(dataA, dataB);
             }
 
             public void endContact(Contact contact) {}
@@ -177,15 +191,50 @@ public class PhysicsSimulation {
         });
     }
 
-    void handleCollision(Object a, Object b) {
-        if (a instanceof Integer && b instanceof Integer) {
-            int idA = (int) a;
-            int idB = (int) b;
+    void handleCollision(PhysicsData a, PhysicsData b) {
+        //if (a.type != ObjectType.PROJECTILE && b.type != ObjectType.PROJECTILE) return;
+        //System.out.println(owner + " detected a bounce!");
+        //System.out.println(owner + ": a:" + a.toString() + ", b:" + b.toString());
+        //System.out.println(owner + ": HIT! a: " + a + ", b: " + b);
+//        if (a instanceof Integer && b instanceof Integer) {
+//            int idA = (int) a;
+//            int idB = (int) b;
+//
+//            if (isProjectile(idA) && isPlayer(idB)) {
+//                //System.out.println(owner + ": a: " + a.toString() + ", b: " + b.toString());
+//                hitPlayer(idB, idA);
+//            } else if (isProjectile(idB) && isPlayer(idA)) {
+//                hitPlayer(idA, idB);
+//            }
+//        }
 
-            if (isProjectile(idA) && isPlayer(idB)) {
-                hitPlayer(idB, idA);
-            } else if (isProjectile(idB) && isPlayer(idA)) {
-                hitPlayer(idA, idB);
+//        if (a instanceof Integer && b instanceof ProjectileId) {
+//            int idA = (int) a;
+//            ProjectileId idB = (ProjectileId) b;
+//            if (isPlayer(idA) && isProjectile(idB)) {
+//                hitPlayer(idA, idB);
+//            }
+//        } else if (a instanceof ProjectileId && b instanceof Integer) {
+//            ProjectileId idA = (ProjectileId) a;
+//            int idB = (int) b;
+//            if (isPlayer(idB) && isProjectile(idA)) {
+//                hitPlayer(idB, idA);
+//            }
+//        }
+
+        if (a.type == ObjectType.PROJECTILE && b.type == ObjectType.PLAYER) {
+            ProjectileId projectileId = new ProjectileId(a.clientId, a.counter);
+            if (isPlayer(b.clientId) && isProjectile(projectileId)) {
+                //System.out.println(owner + ": That was a bounce on a player!");
+                hitPlayer(b.clientId, projectileId);
+            }
+        }
+
+        if (b.type == ObjectType.PROJECTILE && a.type == ObjectType.PLAYER) {
+            ProjectileId projectileId = new ProjectileId(b.clientId, b.counter);
+            if (isPlayer(a.clientId) && isProjectile(projectileId)) {
+                //System.out.println(owner + ": That was a bounce on a player!");
+                hitPlayer(a.clientId, projectileId);
             }
         }
     }
@@ -198,26 +247,30 @@ public class PhysicsSimulation {
         return players.containsKey(id);
     }
 
-    boolean isProjectile(int id) {
+    boolean isProjectile(ProjectileId id) {
         return projectiles.containsKey(id);
     }
 
-    void hitPlayer(int playerId, int projectileId) {
+    void hitPlayer(int playerId, ProjectileId projectileId) {
         ProjectileState ps = projectiles.get(projectileId);
-        //System.out.println("Player [" + playerId + "] got hit by bullet [" + projectileId + "]");
+        System.out.println("Hit!");
+        //System.out.println(owner + ": Player [" + playerId + "] got hit by bullet " + projectileId);
         players.values().forEach(player -> {
             if (player.id == playerId) {
                 if (player.isDead) return;
-                ps.isAlive = false;
-                player.hp--;
-                if (player.hp <= 0) {
+                player.takeDamage(1);
+                if (player.hp <= 0 && !player.isDead) {
                     player.isDead = true;
                     player.isInvincible = true;
                     Random r = new Random();
                     player.nextSpawnPoint = playerSpawnPoints.get(r.nextInt(0, playerSpawnPoints.size()));
-                    System.out.println("I've generated this new spawnPoint: (" + player.nextSpawnPoint.x + "," + player.nextSpawnPoint.y + ")");
+                    //System.out.println("I've generated this new spawnPoint: (" + player.nextSpawnPoint.x + "," + player.nextSpawnPoint.y + ")");
                 }
-                if (owner != null) owner.onTakeDamage(player.id, projectileId);
+                //System.out.println(owner + ": The bullet hit someone! Remove the bullet now!");
+                //ps.isAlive = false;
+                ps.lifeTime = ps.lifeTimeLimit;
+                //System.out.println(owner + ": Lifespan: " + ps.lifeTime);
+                //if (owner != null) owner.onTakeDamage(player.id, projectileId);
                 //System.out.println("Player " + playerId + " was damaged! Remaining HP: " + player.hp);
             }
         });

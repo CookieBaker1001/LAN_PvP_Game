@@ -23,6 +23,28 @@ public class PlayerState implements Serializable {
     public boolean isInvincible = false;
     public Vector2 nextSpawnPoint = new Vector2();
 
+    public void takeDamage(int damage) {
+        hp -= damage;
+        System.out.println("HP left: " + hp);
+        if (hp <= 0) {
+            die();
+        }
+    }
+
+    private void die() {
+        hp = 0;
+        isDead = true;
+        System.out.println("I died!");
+        //startResurrection();
+    }
+
+    public void heal(int heal) {
+        hp += heal;
+        if (hp > MAX_HEALTH) {
+            hp = MAX_HEALTH;
+        }
+    }
+
     public void resurrect() {
         nextSpawnPoint.x += Constants.pxToMeters(PIXELS_PER_METER/2);
         nextSpawnPoint.y += Constants.pxToMeters(PIXELS_PER_METER/2);

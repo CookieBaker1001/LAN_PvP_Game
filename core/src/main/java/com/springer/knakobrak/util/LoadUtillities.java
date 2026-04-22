@@ -29,7 +29,7 @@ public class LoadUtillities {
         fd.restitution = 0.4f;
 
         fd.filter.categoryBits = CollisionBits.PLAYER;
-        fd.filter.maskBits = CollisionBits.BULLET | CollisionBits.PLAYER;
+        fd.filter.maskBits = CollisionBits.BULLET | CollisionBits.PLAYER | CollisionBits.WALL;
 
 //        fd.filter.categoryBits = (short) 0xFFFF;
 //        fd.filter.maskBits = (short) 0xFFFF;
@@ -37,16 +37,18 @@ public class LoadUtillities {
         body.setFixedRotation(true);
 
         Fixture f = body.createFixture(fd);
-        f.setUserData(playerId);
+        PhysicsData data = new PhysicsData(ObjectType.PLAYER, playerId, -1);
+        body.setUserData(data);
+        f.setUserData(data);
 
-        Filter f2 = f.getFilterData();
+        //Filter f2 = f.getFilterData();
         //System.out.println("Player fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
 
         shape.dispose();
         return body;
     }
 
-    public static Body createProjectile(World world, float x, float y, int projId) {
+    public static Body createProjectile(World world, float x, float y, int clientId, int projId) {
         BodyDef bd = new BodyDef();
         bd.type = BodyDef.BodyType.DynamicBody;
         bd.bullet = true;
@@ -64,7 +66,7 @@ public class LoadUtillities {
         fd.restitution = 1f;
 
         fd.filter.categoryBits = CollisionBits.BULLET;
-        fd.filter.maskBits = CollisionBits.PLAYER | CollisionBits.BULLET;
+        fd.filter.maskBits = CollisionBits.PLAYER | CollisionBits.BULLET | CollisionBits.WALL;
 
 //        fd.filter.categoryBits = (short) 0xFFFF;
 //        fd.filter.maskBits = (short) 0xFFFF;
@@ -72,16 +74,18 @@ public class LoadUtillities {
         //fd.isSensor = true;
 
         Fixture f = body.createFixture(fd);
-        f.setUserData(projId);
+        PhysicsData data = new PhysicsData(ObjectType.PROJECTILE, clientId, projId);
+        body.setUserData(data);
+        f.setUserData(data);
 
-        Filter f2 = f.getFilterData();
+        //Filter f2 = f.getFilterData();
         //System.out.println("Projectile fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
 
         shape.dispose();
         return body;
     }
 
-    public static Body createPredictedProjectile(World world, float x, float y, int projId) {
+    public static Body createPredictedProjectile(World world, float x, float y, int clientId, int projId) {
         BodyDef bd = new BodyDef();
         bd.type = BodyDef.BodyType.DynamicBody;
         bd.bullet = true;
@@ -98,8 +102,8 @@ public class LoadUtillities {
         fd.friction = 0f;
         fd.restitution = 1f;
 
-        fd.filter.categoryBits = CollisionBits.PREDICTED;
-        fd.filter.maskBits = 0;
+        fd.filter.categoryBits = CollisionBits.BULLET;
+        fd.filter.maskBits = CollisionBits.PLAYER | CollisionBits.WALL;
 
 //        fd.filter.categoryBits = (short) 0xFFFF;
 //        fd.filter.maskBits = (short) 0xFFFF;
@@ -107,10 +111,11 @@ public class LoadUtillities {
         //fd.isSensor = true;
 
         Fixture f = body.createFixture(fd);
-        f.setUserData(projId);
+        PhysicsData data = new PhysicsData(ObjectType.PROJECTILE, clientId, projId);
+        body.setUserData(data);
+        f.setUserData(data);
 
-        Filter f2 = f.getFilterData();
-        //System.out.println("Predicted projectile fixture created: cat=" + f2.categoryBits + ", mask=" + f2.maskBits);
+        //Filter f2 = f.getFilterData();
 
         shape.dispose();
         return body;
@@ -134,7 +139,11 @@ public class LoadUtillities {
         fd.friction = 0f;
         fd.restitution = 0f;
 
-        body.createFixture(fd);
+        Fixture f = body.createFixture(fd);
+        PhysicsData data = new PhysicsData(ObjectType.WALL, -2, -2);
+        body.setUserData(data);
+        f.setUserData(data);
+
         body.setFixedRotation(true);
         shape.dispose();
         return body;
