@@ -2,59 +2,69 @@ package com.springer.knakobrak;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.utils.Array;
-import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.springer.knakobrak.local.SoundManager;
 import com.springer.knakobrak.net.GameClient;
 import com.springer.knakobrak.net.GameServer;
+import com.springer.knakobrak.net.NetworkListener;
+import com.springer.knakobrak.net.messages.NetMessage;
+import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.screens.MainMenuScreen;
-import com.springer.knakobrak.world.client.Wall;
-import com.springer.knakobrak.world.server.ServerWall;
+import com.springer.knakobrak.world.PlayerState;
 
 
 public class LanPvpGame extends Game {
+
+    public SoundManager soundManager;
     public SpriteBatch batch;
     public Skin uiSkin;
-    public FitViewport viewport;
 
-    public GameClient client; // <-- lives here
+    public GameClient client;
+    public Thread clientThread;
     public GameServer hostedServer;
     public Thread serverThread;
-
-    public boolean inChat;
-    public String username = "UNNAMED";
-    //public Color playerColor = Color.WHITE;
-    public int clientId;
     public int port = 5000;
+
+    public PlayerState localPlayer;
+    public String username;
+    public int playerIcon;
+    public int ballIcon;
+    public int playerId;
+    public boolean isHost = false;
 
     public float worldWidth;
     public float worldHeight;
 
-    public Array<Wall> walls = new Array<>();
+    public PhysicsSimulation simulation;
 
     @Override
     public void create() {
+        soundManager = new SoundManager();
+        soundManager.loadMusic("game", "sounds/action1.mp3");
         username = "UNNAMED-" + (int)(Math.random() * 100000);
-        worldWidth = Gdx.graphics.getWidth();
-        worldHeight = Gdx.graphics.getHeight();
+        //playerIcon = (int) (Math.random() * skinCount);
+        worldWidth = 0;
+        worldHeight = 0;
         batch = new SpriteBatch();
-//        image = new Texture("libgdx.png");
 
-        //font = new BitmapFont();
-        //uiSkin = new Skin(Gdx.files.internal("ui/metal/metal-ui.json"));
         uiSkin = new Skin(Gdx.files.internal("ui/clean-crispy/clean-crispy-ui.json"));
 
-        //viewport = new FitViewport(8, 5);
-        viewport = new FitViewport(worldWidth, worldHeight);
-
-        viewport.update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), true);
-
-        //font has 15pt, but we need to scale it to our viewport by ratio of viewport height to screen height
-        //font.setUseIntegerPositions(false);
-        //font.getData().setScale(viewport.getWorldHeight() / Gdx.graphics.getHeight());
-
         this.setScreen(new MainMenuScreen(this));
+    }
+
+    public void dispatchNetworkMessages() {
+        NetMessage msg;
+        while((msg = client.pollOne()) != null) {
+            Screen screen = getScreen();
+            if (screen instanceof NetworkListener) {
+                NetworkListener listener = (NetworkListener) screen;
+                listener.handleNetworkMessage(msg);
+            } else {
+                System.out.println("No networkListener for " + screen);
+            }
+        }
     }
 
     @Override
@@ -68,14 +78,16 @@ public class LanPvpGame extends Game {
 
     @Override
     public void dispose() {
-        batch.dispose();
-//        image.dispose();
         super.dispose();
+        batch.dispose();
+        soundManager.dispose();
     }
 
     public void cleanupNetworking() {
         if (client != null) {
-            client.send("QUIT");
+//            DisconnectMessage dcm = new DisconnectMessage();
+//            dcm.playerId = playerId;
+//            client.send(dcm);
             client.disconnect();
             client = null;
         }
