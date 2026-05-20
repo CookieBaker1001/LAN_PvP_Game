@@ -10,36 +10,35 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.springer.knakobrak.LanPvpGame;
-import com.springer.knakobrak.net.NetworkListener;
+import com.springer.knakobrak.local.SoundManager;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.Constants;
-import com.springer.knakobrak.util.LoadUtillities;
 import com.springer.knakobrak.world.*;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static com.springer.knakobrak.util.Constants.*;
 
 public class GameScreen implements Screen, NetworkListener {
 
     private final LanPvpGame game;
+    private final SpriteBatch batch;
+    private final Skin uiSkin;
+    private final SoundManager soundManager;
+
     private Stage stage;
 
-    private OrthographicCamera camera;
-    private SpriteBatch batch;
     private Texture background;
-    private Texture wallTexture;
-    private Texture spawnTexture;
     private Texture heartTexture;
     private TextureRegion deadPlayer;
 
@@ -61,43 +60,33 @@ public class GameScreen implements Screen, NetworkListener {
     private boolean chatMode = false;
 
     private PhysicsSimulation simulation;
-    private PlayerState localPlayer;
+    private Player player;
     private Map<Integer, TextureRegion> playerSkins = new HashMap<>();
     private Map<Integer, Texture> ballSkins = new HashMap<>();
 
-    int nextInputId = 0;
-    volatile PlayerInputMessage latestInput;
-
-    private WorldSnapshotMessage previousSnapshot;
-    private WorldSnapshotMessage latestSnapshot;
-
-    static final float INTERPOLATION_DELAY = 0.15f;
-
-    private float localTime;
-
-    Map<ProjectileId, PredictedProjectile> predictedProjectiles = new HashMap<>();
-    int[][] wallGrid;
-
+    private float localTime = 0f;
+    private boolean paused = false;
 
     OrthographicCamera cam;
     float camAngleDeg = 0f;
     float camAngleRad = 0f;
     float deltaX = 0f;
     float rotationSpeed = 0.5f;
-    private final boolean rotateCameraMode = true;
+    private final boolean rotateCameraMode = false;
 
-    public GameScreen(LanPvpGame game) {
+    public GameScreen(LanPvpGame game, SpriteBatch batch, Skin uiSkin, SoundManager soundManager) {
         this.game = game;
-        this.batch = game.batch;
-        this.simulation = game.simulation;
-        this.localPlayer = game.localPlayer;
-        this.localTime = 0f;
-        this.wallGrid = simulation.getWallGrid();
-        this.simulation.owner = "Client";
+        this.batch = batch;
+        this.uiSkin = uiSkin;
+        this.soundManager = soundManager;
+
+        simulation = game.simulation;
+        player = simulation.getPlayer(game.client.id);
+        System.out.println("Got player with id " + game.client.id + ", Status: " + (player == null ? "null" : ("("+player.x+","+player.y+")")));
         //game.soundManager.playMusic("game", true);
         //simulation.setSimulationOwner(this);
 
-        for (PlayerState ps : simulation.getPlayers().values()) {
+        for (Player ps : simulation.players.values()) {
             System.out.println(ps.body == null ? "Player body "+ps.id+" is null" : "Player body "+ps.id+" is not null");
         }
     }
@@ -105,17 +94,15 @@ public class GameScreen implements Screen, NetworkListener {
     @Override
     public void show() {
         worldViewPort = new FitViewport(1280, 720);
-        stage = new Stage(new FitViewport(1280, 720));
+        stage = new Stage(new ScreenViewport());
         cam = (OrthographicCamera) worldViewPort.getCamera();
         Gdx.input.setInputProcessor(stage);
         Gdx.input.setCursorCatched(rotateCameraMode);
 
         playerSkinsAttlas = new TextureAtlas("skins/character_skins.atlas");
 
-        spawnTexture = new Texture("tiles/spawn.png");
         heartTexture = new Texture("tiles/heart.png");
         background = new Texture("misc/grass_bg.png");
-        wallTexture = new Texture("tiles/wall.png");
 
         rootTable = new Table();
         rootTable.setFillParent(true);
@@ -123,9 +110,9 @@ public class GameScreen implements Screen, NetworkListener {
         stage.addActor(rootTable);
 
 
-        coordinatesLabel = new Label("x: 0.0, y: 0.0", game.uiSkin);
+        coordinatesLabel = new Label("x: 0.0, y: 0.0", uiSkin);
         coordinatesLabel.setFontScale(1.5f);
-        timeLabel = new Label("Time: 0.0s", game.uiSkin);
+        timeLabel = new Label("Time: 0.0s", uiSkin);
         heartTable = createHealthBar(MAX_HEALTH, heartTexture);
 
         Table topBar = new Table();
@@ -146,13 +133,14 @@ public class GameScreen implements Screen, NetworkListener {
         rootTable.add(middle).expand().fill();
         rootTable.row();
 
-        chatLog = new Label("", game.uiSkin);
+        chatLog = new Label("", uiSkin);
         chatLog.setWrap(true);
 
-        chatScroll = new ScrollPane(chatLog, game.uiSkin);
+        chatScroll = new ScrollPane(chatLog, uiSkin);
         chatScroll.setFadeScrollBars(false);
 
-        chatInput = new TextField("", game.uiSkin);
+        chatInput = new TextField("", uiSkin);
+        chatInput.setAlignment(1);
         chatInput.setVisible(false);
 
 
@@ -170,12 +158,12 @@ public class GameScreen implements Screen, NetworkListener {
 //        rootTable.add(new Label("", game.uiSkin));
 //        rootTable.add(chatScroll).width(400).height(150).right().bottom().padBottom(30);
 
-        rootTable.setDebug(true);
+        //rootTable.setDebug(true);
 
 
         shapeRenderer = new ShapeRenderer();
         int i = 0;
-        for (PlayerState ps : simulation.getPlayers().values()) {
+        for (Player ps : simulation.players.values()) {
             playerSkins.put(i, playerSkinsAttlas.findRegion("p" + ps.playerIcon));
             //playerSkins.put(i, new Texture("characters/p" + ps.playerIcon + ".png"));
             ballSkins.put(i, new Texture("balls/b" + ps.ballIcon + ".png"));
@@ -189,19 +177,41 @@ public class GameScreen implements Screen, NetworkListener {
         pauseTable = new Table();
         pauseTable.setBackground(createDimBackground());
 
-        Label pausedLabel = new Label("Paused!", game.uiSkin);
+        Label pausedLabel = new Label("Paused <ESC>", uiSkin);
         pausedLabel.setFontScale(5f);
-
         pauseTable.add(pausedLabel).center();
+        pauseTable.row();
+
+        TextButton quitButton = new TextButton("Main menu", uiSkin);
+        pauseTable.add(quitButton).center().width(140).height(45).pad(25);
+
+        TextButton statusButton = new TextButton("Status (Check console)", uiSkin);
+        pauseTable.add(statusButton).center().width(140).height(45).pad(25);
 
         pauseTable.setVisible(false);
+
+        quitButton.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                LeaveGameMessage lm = new LeaveGameMessage();
+                lm.reason = "Client left";
+                game.client.send(lm);
+            }
+        });
+
+        statusButton.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                game.logAll();
+            }
+        });
 
         return pauseTable;
     }
 
     private Drawable createDimBackground() {
         Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        pixmap.setColor(0, 0, 0, 0.6f); // 60% transparent black
+        pixmap.setColor(0, 0, 0, 0.4f); // 60% transparent black
         pixmap.fill();
 
         Texture texture = new Texture(pixmap);
@@ -238,105 +248,10 @@ public class GameScreen implements Screen, NetworkListener {
 
     @Override
     public void render(float delta) {
-
-        if (game.localPlayer == null) {
-            System.out.println("Local player ["+game.playerId+"] is null!");
-            game.localPlayer = simulation.getPlayer(game.playerId);
-            return;
-        }
-
         game.dispatchNetworkMessages();
-
-        handlePlayerReconciliation();
-
         input(delta);
-
-        physicsAccumulator += delta;
-        while (physicsAccumulator >= FIXED_DT) {
-            simulation.step(FIXED_DT);
-            physicsAccumulator -= FIXED_DT;
-        }
-
-        syncBody();
-
-        handlePlayerInterpolation();
-
-        localLogic();
-
-        syncProjectileBodies();
-
-        draw();
-
-        stage.act(delta);
-        stage.draw();
-
-        localTime += delta;
-
-        secondsAccumulator += delta;
-        if (secondsAccumulator > 1f) {
-            ++secondsCounter;
-            //System.out.println("Time: " + secondsCounter);
-            secondsAccumulator -= 1f;
-            //doSomethingEverySecond();
-        }
-        //System.out.println(localTime);
-    }
-
-    private void doSomethingEverySecond() {
-        System.out.print("[WSM]: ( ");
-        if (latestSnapshot.projectiles.isEmpty()) {
-            System.out.print("empty ");
-        } else {
-            for (ProjectileSnapshot ps : latestSnapshot.projectiles) {
-                System.out.print(ps.counter + " ");
-            }
-        }
-        System.out.println(")");
-
-        System.out.print("[Predicted]: ( ");
-        if (predictedProjectiles.isEmpty()) {
-            System.out.print("empty ");
-        } else {
-            for (PredictedProjectile pp : predictedProjectiles.values()) {
-                System.out.print("id:" + pp.projectile.counter + ", fireSequence: " + pp.fireSequence);
-            }
-        }
-        System.out.println(")");
-    }
-
-    Set<ProjectileId> locallyDestroyedBullets = new HashSet<>();
-    private void destroy(ProjectileState p) {
-        if (p == null) return;
-
-        ProjectileId id = new ProjectileId(p.clientId, p.counter);
-
-        if (p.body != null) {
-            simulation.destroyBody(p.body);
-            p.body = null;
-        }
-        //System.out.println("Removing predicted projectile with id (" + p.clientId + "," + p.counter + ")");
-        predictedProjectiles.remove(id);
-        cleanupSuppressedProjectiles(latestSnapshot);
-    }
-
-    private void syncBody() {
-        Vector2 pos = localPlayer.body.getPosition();
-        localPlayer.x = pos.x;
-        localPlayer.y = pos.y;
-        localPlayer.y = pos.y;
-    }
-
-    private void syncProjectileBodies() {
-        for (PredictedProjectile ps : predictedProjectiles.values()) {
-            Vector2 pos = ps.projectile.body.getPosition();
-            ps.projectile.x = pos.x;
-            ps.projectile.y = pos.y;
-        }
-        for (ProjectileState ps : simulation.getProjectiles().values()) {
-            Vector2 pos = ps.body.getPosition();
-            ps.x = pos.x;
-            ps.y = pos.y;
-        }
+        logic(delta);
+        draw(delta);
     }
 
     private void enterChatMode() {
@@ -361,7 +276,6 @@ public class GameScreen implements Screen, NetworkListener {
         stage.unfocusAll();
     }
 
-    private boolean paused = false;
     private void togglePause() {
         paused = !paused;
         pauseTable.setVisible(paused);
@@ -375,12 +289,7 @@ public class GameScreen implements Screen, NetworkListener {
         }
     }
 
-    private float inputAccumulator = 0f;
-
-    private int nextProjectileId = 0;
     private void input(float delta) {
-
-        inputAccumulator += delta;
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             if (chatMode) {
@@ -390,35 +299,20 @@ public class GameScreen implements Screen, NetworkListener {
                 togglePause();
             }
         }
+        if (paused) return;
 
-        Vector2 input = new Vector2();
-        if (!chatMode && !localPlayer.isDead) {
-            if (Gdx.input.isKeyPressed(Input.Keys.W)) input.y += 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.S)) input.y -= 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.A)) input.x -= 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.D)) input.x += 1;
+        if (Gdx.input.isKeyJustPressed(Input.Keys.C)) game.logAll();
+
+        Vector2 input = Vector2.Zero;
+        if (!chatMode && !player.isDead) {
+            input = handleWASD();
         }
-        input.nor();
-        input.rotateRad(-camAngleRad);
 
-        if (inputAccumulator >= FIXED_DT) {
-            inputAccumulator -= FIXED_DT;
-
-            PlayerInputMessage pim = new PlayerInputMessage();
-            pim.playerId = localPlayer.id;
-            pim.sequence = nextInputId++;
-            pim.dx = input.x;
-            pim.dy = input.y;
-
-            latestInput = pim;
-            game.client.send(latestInput);
-
-            applyMovement(pim);
-        }
+        applyMovement(input, delta);
 
         if (paused) return;
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
-            handleFire();
+            //handleFire();
         }
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
@@ -432,174 +326,41 @@ public class GameScreen implements Screen, NetworkListener {
         }
     }
 
-    private void handleFire() {
-        Vector2 angle = new Vector2();
-
-        //System.out.println("[" + localPlayer.id + "]: Clicked!");
-
-        if (!rotateCameraMode) {
-            Vector3 mouse = new Vector3(
-                Gdx.input.getX(),
-                Gdx.input.getY(),
-                0
-            );
-
-            worldViewPort.unproject(mouse);
-
-            angle.x = mouse.x - Constants.metersToPx(localPlayer.x);
-            angle.y = mouse.y - Constants.metersToPx(localPlayer.y);
-
-            float len = (float)Math.sqrt(angle.x * angle.x + angle.y * angle.y);
-            if (len == 0) return;
-
-            angle.x /= len;
-            angle.y /= len;
-        } else {
-            angle.x = MathUtils.sin(camAngleRad);
-            angle.y = MathUtils.cos(camAngleRad);
-        }
-
-        ProjectileState p = spawnLocalProjectile(angle.x, angle.y);
-        PredictedProjectile pp = new PredictedProjectile();
-        //pp.fireSequence = nextProjectileId++;
-        pp.projectile = p;
-        pp.projectile.clientId = localPlayer.id;
-        pp.projectile.counter = nextProjectileId;
-        predictedProjectiles.put(new ProjectileId(localPlayer.id ,nextProjectileId++), pp);
-
-        SpawnProjectileMessage spm = new SpawnProjectileMessage();
-        spm.ownerId = localPlayer.id;
-        //spm.fireSequence = pp.fireSequence;
-        spm.counter = pp.projectile.counter;
-        spm.dx = p.body.getLinearVelocity().x;
-        spm.dy = p.body.getLinearVelocity().y;
-        game.client.send(spm);
+    private Vector2 handleWASD() {
+        Vector2 input = new Vector2();
+        if (Gdx.input.isKeyPressed(Input.Keys.W)) input.y += 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.S)) input.y -= 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.A)) input.x -= 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.D)) input.x += 1;
+        return input;
     }
 
-    private ProjectileState spawnLocalProjectile(float dx, float dy) {
-        //System.out.println("Spawning predicted bullet!");
-        ProjectileState p = new ProjectileState();
-        p.clientId = localPlayer.id;
-        Vector2 dir = new Vector2(dx, dy).nor();
-
-        Vector2 spawnPos = localPlayer.body.getPosition()
-            .cpy()
-            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
-
-        p.body = LoadUtillities.createPredictedProjectile(
-            simulation.getWorld(),
-            spawnPos.x,
-            spawnPos.y,
-            p.clientId,
-            p.counter
-        );
-
-        p.body.setLinearVelocity(
-            dir.scl(BULLET_SPEED_MPS)
-        );
-
-        return p;
-    }
-
-    private void cleanupSuppressedProjectiles(WorldSnapshotMessage msg) {
-        Set<ProjectileId> alive = msg.projectiles.stream()
-            .map(p -> new ProjectileId(p.ownerId, p.counter))
-            .collect(Collectors.toSet());
-
-        locallyDestroyedBullets.removeIf(id -> !alive.contains(id));
-    }
-
-    private void handleProjectiles() {
-
-        if (latestSnapshot == null || previousSnapshot == null) return;
-
-        for (ProjectileSnapshot pss : latestSnapshot.projectiles) {
-            //System.out.println("[1]");
-            if (locallyDestroyedBullets.contains(new ProjectileId(pss.ownerId, pss.counter))) {
-                continue;
-            }
-            //System.out.println("[2]");
-            if (pss.ownerId == localPlayer.id) {
-                //System.out.println("[3]");
-                PredictedProjectile predicted = predictedProjectiles.remove(new ProjectileId(pss.ownerId, pss.counter));
-
-                if (predicted != null) {
-                    //System.out.println("[4]");
-                    destroy(predicted.projectile);
-                    //System.out.println("Spawning from here! Next projectileId: " + nextProjectileId);
-                    ProjectileState proj = spawnProjectileFromSnapshot(pss);
-                    simulation.addProjectile(new ProjectileId(pss.ownerId, pss.counter), proj);
-                    //simulation.projectiles.put(pss.id, proj);
-                    continue;
-                }
-            }
-
-            if (!simulation.containsProjectileKey(new ProjectileId(pss.ownerId, pss.counter))) {
-                //System.out.println("Spawning from here now!");
-                simulation.addProjectile(new ProjectileId(pss.ownerId, pss.counter), spawnProjectileFromSnapshot(pss));
-            }
-        }
-
-        Set<ProjectileId> serverProjectiles = latestSnapshot.projectiles.stream()
-            .map(p -> new ProjectileId(p.ownerId, p.counter))
-            .collect(Collectors.toSet());
-
-        Iterator<Map.Entry<ProjectileId, ProjectileState>> it =
-            simulation.getProjectiles().entrySet().iterator();
-
-        while (it.hasNext()) {
-            Map.Entry<ProjectileId, ProjectileState> entry = it.next();
-            ProjectileId id = entry.getKey();
-
-            if (!serverProjectiles.contains(id)) {
-                // Server says this projectile is gone → remove it
-                destroy(entry.getValue());
-                it.remove();
-            }
-        }
-    }
-
-    private ProjectileState spawnProjectileFromSnapshot(ProjectileSnapshot snap) {
-        //System.out.println("Spawning official bullet!");
-        ProjectileState ps = new ProjectileState();
-        ps.counter = snap.counter;
-        ps.clientId = snap.ownerId;
-        ps.lifeTime = snap.lifeTime;
-        //System.out.println("[2]: Firing sequence: " + ps.fireSequence);
-        Vector2 dir = new Vector2(snap.vx, snap.vy).nor();
-        Vector2 spawnPos = new Vector2(snap.x, snap.y)
-            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
-        ps.body = LoadUtillities.createProjectile(
-            simulation.getWorld(),
-            spawnPos.x,
-            spawnPos.y,
-            ps.clientId,
-            ps.counter
-        );
-        ps.body.setLinearVelocity(
-            dir.scl(BULLET_SPEED_MPS)
-        );
-
-        return ps;
-    }
-
-    private void applyMovement(PlayerInputMessage input) {
-        Vector2 desiredVelocity = new Vector2(input.dx, input.dy)
+    private void applyMovement(Vector2 input, float delta) {
+        Vector2 desiredVelocity = new Vector2(input.x, input.y)
             .nor()
-            .scl(PLAYER_SPEED_MPS);
-        localPlayer.body.setLinearVelocity(desiredVelocity);
+            .scl(PLAYER_SPEED_MPS * delta);
+        player.x += desiredVelocity.x;
+        player.y += desiredVelocity.y;
+        PlayerWASDMessage pwasdm = new PlayerWASDMessage();
+        pwasdm.x = player.x;
+        pwasdm.y = player.y;
+        try {
+            game.client.send(pwasdm);
+        } catch (Exception e) {
+            System.out.println("Client is null");
+        }
     }
 
     private void moveCameraToPlayer() {
-        if (localPlayer != null) {
-            float x = Constants.metersToPx(localPlayer.x);
-            float y = Constants.metersToPx(localPlayer.y);
+        if (player != null) {
+            float x = Constants.metersToPx(player.x);
+            float y = Constants.metersToPx(player.y);
             cam.position.set(x, y, 0);
         }
     }
 
-    private void localLogic() {
-        if (rotateCameraMode && !paused && !chatMode && !localPlayer.isDead) {
+    private void logic(float delta) {
+        if (rotateCameraMode && !paused && !chatMode && !player.isDead) {
             deltaX = Gdx.input.getDeltaX();
             camAngleDeg += deltaX * rotationSpeed;
             cam.rotate(deltaX * rotationSpeed);
@@ -608,74 +369,31 @@ public class GameScreen implements Screen, NetworkListener {
         moveCameraToPlayer();
         updateCoordinateLabel();
         updateTimeLabel();
+
+        localTime += delta;
+
+        secondsAccumulator += delta;
+        if (secondsAccumulator > 1f) {
+            ++secondsCounter;
+            secondsAccumulator -= 1f;
+            doSomethingEverySecond();
+        }
     }
 
-    private void handlePlayerReconciliation() {
-        if (latestSnapshot == null || previousSnapshot == null) return;
-        if (latestSnapshot.serverTime <= previousSnapshot.serverTime) return;
-        PlayerSnapshot serverSelf = latestSnapshot.players.get(localPlayer.id);
-
-        if (serverSelf == null) return;
-
-        Vector2 pos = localPlayer.body.getPosition();
-
-        float errorX = serverSelf.x - localPlayer.body.getPosition().x;
-        float errorY = serverSelf.y - localPlayer.body.getPosition().y;
-
-        float errorSq = errorX * errorX +errorY * errorY;
-        if (errorSq > 0.25f) {
-            localPlayer.body.setTransform(serverSelf.x, serverSelf.y, localPlayer.body.getAngle());
-            localPlayer.body.setLinearVelocity(0, 0);
-        }
-
-        float correctionStrength = 0.1f; // tweak (0.05–0.2)
-        localPlayer.body.setTransform(
-            pos.x + errorX * correctionStrength,
-            pos.y + errorY * correctionStrength,
-            localPlayer.body.getAngle()
-        );
-    }
-
-    private void handlePlayerInterpolation() {
-        if (latestSnapshot == null || previousSnapshot == null) return;
-        if (latestSnapshot.serverTime <= previousSnapshot.serverTime) return;
-
-        float renderTime = localTime - INTERPOLATION_DELAY;
-        float span = latestSnapshot.serverTime - previousSnapshot.serverTime;
-
-        if (span <= 0f) return;
-
-        float t = (renderTime - previousSnapshot.serverTime) / span;
-        t = MathUtils.clamp(t, 0f, 1f);
-
-        for (PlayerState ps : simulation.getPlayers().values()) {
-            if (ps.id == localPlayer.id) continue;
-
-            PlayerSnapshot p0 = previousSnapshot.players.get(ps.id);
-            PlayerSnapshot p1 = latestSnapshot.players.get(ps.id);
-
-            if (p0 == null || p1 == null) continue;
-
-            ps.x = MathUtils.lerp(p0.x, p1.x, t);
-            ps.y = MathUtils.lerp(p0.y, p1.y, t);
-
-            Vector2 current = ps.body.getPosition();
-            Vector2 target = new Vector2(ps.x, ps.y);
-
-            Vector2 vel = target.sub(current).scl(10f); // tune factor
-            ps.body.setLinearVelocity(vel);
-        }
+    private void doSomethingEverySecond() {
+        //System.out.println("Time: " + secondsCounter);
+        simulation.playerStates();
     }
 
     private void updateCoordinateLabel() {
-        coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", localPlayer.x, localPlayer.y));
+        coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", player.x, player.y));
     }
 
     private void updateTimeLabel() {
         timeLabel.setText(String.format("Time: %.1f", localTime));
     }
 
-    private void draw() {
+    private void draw(float delta) {
         //ScreenUtils.clear(Color.BLACK);
 
         Gdx.gl.glClearColor(0.2f, 0.15f, 0.2f, 1);
@@ -686,32 +404,19 @@ public class GameScreen implements Screen, NetworkListener {
 
         batch.begin();
         batch.draw(background, PIXELS_PER_METER/2, PIXELS_PER_METER/2, (game.worldWidth-1) * PIXELS_PER_METER, (game.worldHeight-1) * PIXELS_PER_METER);
-        for (int i = 0; i < wallGrid.length; i++) {
-            for (int j = 0; j < wallGrid[0].length; j++) {
-                int w = wallGrid[i][j];
-                if (w == 1) {
-                    batch.draw(wallTexture, PIXELS_PER_METER * j, PIXELS_PER_METER * i, PIXELS_PER_METER, PIXELS_PER_METER);
-                    continue;
-                }
-                if (w == 0) {
-                    continue;
-                }
-                if (w == 2) {
-                    batch.draw(spawnTexture, PIXELS_PER_METER * j, PIXELS_PER_METER * i, PIXELS_PER_METER, PIXELS_PER_METER);
-                }
-            }
-        }
-        for (PlayerState p : simulation.getPlayers().values()) {
-            batch.draw(p.isDead ? deadPlayer : playerSkins.get(p.id),
+
+        for (Player p : simulation.players.values()) {
+            batch.draw(playerSkins.get(0),
                 Constants.metersToPx(p.x) - PLAYER_RADIUS_PX, Constants.metersToPx(p.y) - PLAYER_RADIUS_PX,
                 PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
-                1f, 1f, -camAngleDeg);
+                1f, 1f, 0);
         }
-        for (ProjectileState p : simulation.getProjectiles().values()) {
-            batch.draw(ballSkins.get(p.clientId), Constants.metersToPx(p.x) - BULLET_RADIUS_PX, Constants.metersToPx(p.y) - BULLET_RADIUS_PX, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
-        }
+
         batch.end();
         //drawGrid();
+
+        stage.act(delta);
+        stage.draw();
     }
 
     private void drawGrid() {
@@ -743,7 +448,7 @@ public class GameScreen implements Screen, NetworkListener {
 
     @Override
     public void hide() {
-
+        //Gdx.input.setInputProcessor(null);
     }
 
     @Override
@@ -752,13 +457,58 @@ public class GameScreen implements Screen, NetworkListener {
         background.dispose();
     }
 
-    private void handleWorldSnapshot(WorldSnapshotMessage msg) {
-        previousSnapshot = latestSnapshot;
-        latestSnapshot = msg;
-        handleProjectiles();
+    @Override
+    public void handleNetworkMessage(NetMessage msg) {
+        switch (msg) {
+            case WorldStateMessage wsm -> handleWorldStateMessage(wsm);
+            case ChatMessage cm -> handleChatMessage(cm);
+            case LeaveAcceptMessage lam -> handleLeaveAcceptMessage(lam);
+            case PlayerListMessage plm -> handlePlayerListMessage(plm);
+            default -> {
+                //System.out.println("Unknown message format: " + msg.getClass());
+            }
+        }
     }
 
-    public void addChatMessage(ChatMessage msg) {
+    private void handlePlayerListMessage(PlayerListMessage plm) {
+        for (int i = 0; i < plm.ids.length; i++) {
+            System.out.println("["+plm.ids[i]+"]: '"+plm.names[i]+"'");
+        }
+    }
+
+    float counter = 0f;
+    private void handleWorldStateMessage(WorldStateMessage wsm) {
+        //System.out.println("WSM!");
+//        counter += 0.05f;
+//        if (counter >= 1f) {
+//            counter = 0f;
+//            System.out.println("Count: " + wsm.x.length);
+//        }
+        for (int i = 0; i < wsm.x.length; i++) {
+            Player p = simulation.getPlayer(wsm.ids[i]);
+            if (p == null) {
+                p = new Player();
+                p.id = wsm.ids[i];
+                simulation.addPlayer(p.id, p);
+            }
+            p.x = wsm.x[i];
+            p.y = wsm.y[i];
+        }
+        for (Player p : simulation.players.values()) {
+            boolean found = false;
+            for (int i = 0; i < wsm.x.length; i++) {
+                if (wsm.ids[i] == p.id) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                simulation.removePlayer(p.id);
+            }
+        }
+    }
+
+    private void handleChatMessage(ChatMessage msg) {
         chatLog.setText(chatLog.getText() + "\n" + msg.message);
         Gdx.app.postRunnable(() -> {
             chatScroll.layout();
@@ -766,45 +516,9 @@ public class GameScreen implements Screen, NetworkListener {
         });
     }
 
-    private void handlePlayerHealthMessage(PlayerHealthMessage phm) {
-        if (phm.playerId == localPlayer.id) {
-            localPlayer.hp = phm.hp;
-            updateHealth(localPlayer.hp);
-        } else {
-            simulation.getPlayer(phm.playerId).hp = phm.hp;
-        }
+    private void handleLeaveAcceptMessage(LeaveAcceptMessage lam) {
+        System.out.println(lam.message);
+        game.client.disconnect();
+        game.setScreen(new LobbyScreen(game, batch, uiSkin, soundManager));
     }
-
-    private void handlePlayerDeathMessage(PlayerDeathMessage dm) {
-        localPlayer.nextSpawnPoint = new Vector2(dm.nextSpawnPointX, dm.nextSpawnPointY);
-        localPlayer.nextSpawnPoint.x += Constants.pxToMeters(PIXELS_PER_METER/2);
-        localPlayer.nextSpawnPoint.y += Constants.pxToMeters(PIXELS_PER_METER/2);
-        System.out.println("Next spawn point will be: (" + localPlayer.nextSpawnPoint.x + "," + localPlayer.nextSpawnPoint.y + ")");
-    }
-
-    @Override
-    public void handleNetworkMessage(NetMessage msg) {
-        if (msg instanceof WorldSnapshotMessage) {
-            handleWorldSnapshot((WorldSnapshotMessage) msg);
-        } else if (msg instanceof ChatMessage) {
-            addChatMessage((ChatMessage) msg);
-        } else if (msg instanceof PlayerHealthMessage) {
-            handlePlayerHealthMessage((PlayerHealthMessage) msg);
-        } else if (msg instanceof PlayerDeathMessage) {
-            handlePlayerDeathMessage((PlayerDeathMessage) msg);
-        } else {
-            System.out.println("Unknown message type... " + msg.getClass());
-        }
-    }
-
-//    @Override
-//    public void onTakeDamage(int playerId, int projectileId) {
-//        PlayerState p = simulation.getPlayer(playerId);
-//        if (p.isDead) return;
-//        System.out.println("Player [" + playerId + "] took damage! HP: " + p.hp);
-//        if (p == localPlayer) {
-//            updateHealth(localPlayer.hp);
-//        }
-//        locallyDestroyedBullets.add(projectileId);
-//    }
 }

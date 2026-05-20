@@ -9,7 +9,7 @@ import java.io.Serializable;
 import static com.springer.knakobrak.util.Constants.MAX_HEALTH;
 import static com.springer.knakobrak.util.Constants.PIXELS_PER_METER;
 
-public class PlayerState implements Serializable {
+public class Player implements Serializable {
     public int id;
     public String name;
     public Body body;

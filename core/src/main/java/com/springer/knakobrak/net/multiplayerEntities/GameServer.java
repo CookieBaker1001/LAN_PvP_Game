@@ -1,10 +1,8 @@
-package com.springer.knakobrak.net;
+package com.springer.knakobrak.net.multiplayerEntities;
 
 import com.badlogic.gdx.math.Vector2;
-import com.springer.knakobrak.net.gameServerHelpers.GameHelper;
-import com.springer.knakobrak.net.gameServerHelpers.LoadingHelper;
-import com.springer.knakobrak.net.gameServerHelpers.LobbyHelper;
 import com.springer.knakobrak.net.messages.*;
+import com.springer.knakobrak.util.ServerMessage;
 import com.springer.knakobrak.world.*;
 
 import java.io.*;
@@ -18,9 +16,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class GameServer implements Runnable {
 
-    private LobbyHelper lobbyHelper;
-    private LoadingHelper loadingHelper;
-    private GameHelper gameHelper;
+//    private LobbyHelper lobbyHelper;
+//    private LoadingHelper loadingHelper;
+//    private GameHelper gameHelper;
 
     private ServerSocket serverSocket;
     private Thread gameLoopThread;
@@ -42,13 +40,13 @@ public class GameServer implements Runnable {
         this.port = port;
         this.running = true;
         this.serverSocket = new ServerSocket(port);
-        this.simulation = new PhysicsSimulation();
-        this.simulation.initPhysics();
+        this.simulation = new PhysicsSimulation("Server");
+        //this.simulation.initPhysics();
         this.serverTime = 0f;
 
-        this.lobbyHelper = new LobbyHelper(this, simulation, clients, host, nextId);
-        this.loadingHelper = new LoadingHelper(this, clients);
-        this.gameHelper = new GameHelper(simulation, clients);
+//        this.lobbyHelper = new LobbyHelper(this, simulation, clients, host, nextId);
+//        this.loadingHelper = new LoadingHelper(this, clients);
+//        this.gameHelper = new GameHelper(simulation, clients);
     }
 
     enum ServerState {
@@ -72,12 +70,12 @@ public class GameServer implements Runnable {
                 Socket socket = serverSocket.accept();
                 if (!running) break;
 
-                ClientHandler client = new ClientHandler(this, socket);
-                Thread clientThread = new Thread(client);
-                clientThread.start();
-
-                System.out.println("New client connected!");
-                if (shutdownRequested) running = false;
+//                ClientHandler client = new ClientHandler(this, socket);
+//                Thread clientThread = new Thread(client);
+//                clientThread.start();
+//
+//                System.out.println("New client connected!");
+//                if (shutdownRequested) running = false;
             }
         } catch (IOException e) {
             if (running) {
@@ -121,12 +119,12 @@ public class GameServer implements Runnable {
     }
 
     private void dispatchMessage(ClientHandler sender, NetMessage msg) {
-        switch (serverState) {
-            case LOBBY: {lobbyHelper.handleLobbyMessage(sender, msg);}
-            case LOADING: {loadingHelper.handleLoadingMessage(sender, msg);}
-            case GAME: {gameHelper.handleGameMessage(sender, msg);}
-            default: {}
-        }
+//        switch (serverState) {
+//            case LOBBY: {lobbyHelper.handleLobbyMessage(sender, msg);}
+//            case LOADING: {loadingHelper.handleLoadingMessage(sender, msg);}
+//            case GAME: {gameHelper.handleGameMessage(sender, msg);}
+//            default: {}
+//        }
     }
 
     public void enqueue(ServerMessage sm) {
@@ -143,13 +141,13 @@ public class GameServer implements Runnable {
         while (running && !shutdownRequested && serverState != ServerState.SHUTDOWN) {
             processServerMessages();
             if (serverState == ServerState.GAME) {
-                simulation.step(SERVER_TICK_SPEED, 6, 2);
+                //simulation.step(SERVER_TICK_SPEED, 6, 2);
                 syncBodiesToGameState();
 
                 broadcastAccumulator += SERVER_TICK_SPEED;
                 if (broadcastAccumulator >= broadcastRefreshRate) {
                     broadcastAccumulator -= broadcastRefreshRate;
-                    broadcastGameState();
+                    //broadcastGameState();
                 }
                 secondCounter += SERVER_TICK_SPEED;
                 if (secondCounter >= 1f) {
@@ -169,19 +167,19 @@ public class GameServer implements Runnable {
     }
 
     private void syncBodiesToGameState() {
-        for (PlayerState p : simulation.getPlayers().values()) {
+        for (Player p : simulation.players.values()) {
             if (p.body == null) continue;
             Vector2 pos = p.body.getPosition();
             p.x = pos.x;
             p.y = pos.y;
         }
 
-        for (ProjectileState proj : simulation.getProjectiles().values()) {
-            if (proj.body == null) continue;
-            Vector2 pos = proj.body.getPosition();
-            proj.x = pos.x;
-            proj.y = pos.y;
-        }
+//        for (ProjectileState proj : simulation.projectiles.values()) {
+//            if (proj.body == null) continue;
+//            Vector2 pos = proj.body.getPosition();
+//            proj.x = pos.x;
+//            proj.y = pos.y;
+//        }
     }
 
     private void printWallGrid(int[][] grid) {
@@ -193,11 +191,11 @@ public class GameServer implements Runnable {
         }
     }
 
-    private void printWalls(ArrayList<Wall> walls) {
-        for (Wall w : walls) {
-            System.out.println(w);
-        }
-    }
+//    private void printWalls(ArrayList<Wall> walls) {
+//        for (Wall w : walls) {
+//            System.out.println(w);
+//        }
+//    }
 
     public void broadcast(NetMessage msg) {
         clients.values().forEach(c -> {
@@ -206,7 +204,7 @@ public class GameServer implements Runnable {
             } catch (Exception e) {
                 System.err.println("FAILED TO SEND TO CLIENT " + c.id);
                 e.printStackTrace();
-                c.requestDisconnect();
+                //c.requestDisconnect();
                 //c.disconnect();
             }
         });
@@ -216,32 +214,32 @@ public class GameServer implements Runnable {
         c.send(msg);
     }
 
-    private void broadcastGameState() {
-        WorldSnapshotMessage wsm = new WorldSnapshotMessage();
-        wsm.players = new ArrayList<>();
-        for (ClientHandler c : clients.values()) {
-            PlayerSnapshot p = new PlayerSnapshot();
-            p.id = c.id;
-            p.x = c.playerState.x;
-            p.y = c.playerState.y;
-            p.time = serverTime;
-            wsm.players.add(p);
-        }
-        wsm.projectiles = new ArrayList<>();
-        for (ProjectileState ps : simulation.getProjectiles().values()) {
-            ProjectileSnapshot snap = new ProjectileSnapshot();
-            snap.counter = ps.counter;
-            snap.ownerId = ps.clientId;
-            snap.x = ps.x;
-            snap.y = ps.y;
-            snap.vx = ps.body.getLinearVelocity().x;
-            snap.vy = ps.body.getLinearVelocity().y;
-            snap.lifeTime = ps.lifeTime;
-            wsm.projectiles.add(snap);
-        }
-        wsm.serverTime = this.serverTime;
-        broadcast(wsm);
-    }
+//    private void broadcastGameState() {
+//        WorldSnapshotMessage wsm = new WorldSnapshotMessage();
+//        wsm.players = new ArrayList<>();
+//        for (ClientHandler c : clients.values()) {
+//            PlayerSnapshot p = new PlayerSnapshot();
+//            p.id = c.id;
+////            p.x = c.playerState.x;
+////            p.y = c.playerState.y;
+//            p.time = serverTime;
+//            wsm.players.add(p);
+//        }
+//        wsm.projectiles = new ArrayList<>();
+//        for (ProjectileState ps : simulation.projectiles.values()) {
+//            ProjectileSnapshot snap = new ProjectileSnapshot();
+//            snap.counter = ps.counter;
+//            snap.ownerId = ps.clientId;
+//            snap.x = ps.x;
+//            snap.y = ps.y;
+//            snap.vx = ps.body.getLinearVelocity().x;
+//            snap.vy = ps.body.getLinearVelocity().y;
+//            snap.lifeTime = ps.lifeTime;
+//            wsm.projectiles.add(snap);
+//        }
+//        wsm.serverTime = this.serverTime;
+//        broadcast(wsm);
+//    }
 
     public void shutdown() {
         running = false;

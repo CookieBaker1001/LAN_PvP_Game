@@ -1,6 +1,6 @@
-package com.springer.knakobrak.world;
+package com.springer.knakobrak.util;
 
-import com.springer.knakobrak.net.ClientHandler;
+import com.springer.knakobrak.net.multiplayerEntities.ClientHandler;
 import com.springer.knakobrak.net.messages.NetMessage;
 
 public class ServerMessage {

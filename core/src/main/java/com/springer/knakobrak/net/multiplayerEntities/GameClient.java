@@ -1,6 +1,7 @@
-package com.springer.knakobrak.net;
+package com.springer.knakobrak.net.multiplayerEntities;
 
 import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.springer.knakobrak.LanPvpGame;
@@ -8,6 +9,8 @@ import com.springer.knakobrak.net.messages.DisconnectMessage;
 import com.springer.knakobrak.net.messages.EndGameMessage;
 import com.springer.knakobrak.net.messages.NetMessage;
 import com.springer.knakobrak.serialization.NetworkRegistry;
+import com.springer.knakobrak.util.ServerType;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.Queue;
@@ -24,10 +27,13 @@ public class GameClient implements Runnable {
     private final Queue<NetMessage> incoming;
 
     private volatile boolean connected;
-    private volatile boolean disconnectRequested = false;
+    private volatile boolean disconnectRequested;
 
-    String host;
-    int port;
+    private String host;
+    private int port;
+    public int id;
+    public boolean isHost;
+    public ServerType serverType;
 
     private LanPvpGame game;
 
@@ -35,15 +41,20 @@ public class GameClient implements Runnable {
         this.game =  game;
         this.host = host;
         this.port = port;
+
         socket = new Socket(host, port);
         kryo = new Kryo();
         NetworkRegistry.register(kryo);
         kryo.setReferences(false);
+
         in = new Input(socket.getInputStream());
         out = new Output(socket.getOutputStream());
+
         incoming = new ConcurrentLinkedQueue<>();
-        //outgoing = new LinkedBlockingQueue<>();
+
+        isHost = false;
         connected = true;
+        disconnectRequested = false;
     }
 
     @Override
@@ -51,27 +62,26 @@ public class GameClient implements Runnable {
         try {
             readLoop();
         } catch (IOException e) {
-            if (!disconnectRequested) e.printStackTrace();
+            e.printStackTrace();
         } finally {
-            cleanup();
             disconnect();
         }
     }
 
     private void readLoop() throws IOException {
         NetMessage msg;
-        while (connected) {
-            msg = (NetMessage) kryo.readClassAndObject(in);
-            //System.out.println("C: RECV <- " + msg.getClass().getSimpleName());
-            incoming.offer(msg);
-
-            if (disconnectRequested) connected = false;
+        try {
+            while (connected) {
+                msg = (NetMessage) kryo.readClassAndObject(in);
+                incoming.offer(msg);
+                if (disconnectRequested) connected = false;
+            }
+        } catch (Exception e) {
+            System.out.println("Client("+game.id+") is leaving.");
         }
     }
 
-    // Used by Client classes to send messages
     public void send(NetMessage msg) {
-        //System.out.println("C: SEND -> " + msg.getClass().getSimpleName());
         synchronized (out) {
             kryo.writeClassAndObject(out, msg);
             out.flush();
@@ -82,56 +92,11 @@ public class GameClient implements Runnable {
         return incoming.poll();
     }
 
-    public boolean hasOne() {
-        return !incoming.isEmpty();
-    }
-
     public void disconnect() {
-        connected = false;
-        try {
-            socket.close();
-        } catch (IOException ignored) {}
-        cleanup();
-    }
-
-    public void requestDisconnect() {
         disconnectRequested = true;
-        DisconnectMessage dcm = new DisconnectMessage();
-        dcm.playerId = game.playerId;
-        send(dcm);
-    }
-
-    public void requestShutdown() {
-        //disconnectRequested = true;
-        EndGameMessage egm = new EndGameMessage();
-        egm.reason = "Host is shutting down";
-        send(egm);
-    }
-
-    public boolean isConnected() {
-        return connected;
-    }
-
-    public void shutdown() {
-        disconnectRequested = true;
-    }
-
-    public void disconnect(int id) {
-        DisconnectMessage dcm = new DisconnectMessage();
-        dcm.reason = "Client quit on their own volition";
-        dcm.playerId = id;
-        send(dcm);
-        connected = false;
-        try {
-            socket.close();
-        } catch (IOException ignored) {}
-    }
-
-    private void cleanup() {
-        connected = false;
-
         try { in.close(); } catch (Exception ignored) {}
         try { out.close(); } catch (Exception ignored) {}
         try { socket.close(); } catch (Exception ignored) {}
+        game.isClientShuttingDown = true;
     }
 }

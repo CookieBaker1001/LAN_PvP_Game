@@ -2,7 +2,7 @@ package com.springer.knakobrak.util;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
-import com.springer.knakobrak.world.Wall;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -149,19 +149,19 @@ public class LoadUtillities {
         return body;
     }
 
-    public static Wall createMergedWall(World world, int x, int y, int w, int h) {
-
-        float centerX = (x + w / 2f);
-        float centerY = (y + h / 2f);
-
-        Wall wall = new Wall();
-        wall.body = LoadUtillities.createWall(world, centerX, centerY, h, w);
-        wall.x = wall.body.getPosition().x;
-        wall.y = wall.body.getPosition().y;
-        wall.height = h;
-        wall.width = w;
-        return wall;
-    }
+//    public static Wall createMergedWall(World world, int x, int y, int w, int h) {
+//
+//        float centerX = (x + w / 2f);
+//        float centerY = (y + h / 2f);
+//
+//        Wall wall = new Wall();
+//        wall.body = LoadUtillities.createWall(world, centerX, centerY, h, w);
+//        wall.x = wall.body.getPosition().x;
+//        wall.y = wall.body.getPosition().y;
+//        wall.height = h;
+//        wall.width = w;
+//        return wall;
+//    }
 
     public static int[][] loadLevel(String path) throws IOException {
         List<int[]> rows = new ArrayList<>();
@@ -194,56 +194,56 @@ public class LoadUtillities {
         return rows.toArray(new int[0][]);
     }
 
-    public static ArrayList<Wall> generateWallsFromGrid(World world, int[][] grid) {
-        int rows = grid.length;
-        int cols = grid[0].length;
-
-        boolean[][] used = new boolean[rows][cols];
-        ArrayList<Wall> walls = new ArrayList<>();
-
-        for (int y = 0; y < rows; y++) {
-            for (int x = 0; x < cols; x++) {
-
-                if (grid[y][x] != 1 || used[y][x]) continue;
-//                if (grid[y][x] == 2) {a
-//                    simulation.addPlayerSpawnPoint(new Vector2(x, y));
-//                    continue;
+//    public static ArrayList<Wall> generateWallsFromGrid(World world, int[][] grid) {
+//        int rows = grid.length;
+//        int cols = grid[0].length;
+//
+//        boolean[][] used = new boolean[rows][cols];
+//        ArrayList<Wall> walls = new ArrayList<>();
+//
+//        for (int y = 0; y < rows; y++) {
+//            for (int x = 0; x < cols; x++) {
+//
+//                if (grid[y][x] != 1 || used[y][x]) continue;
+////                if (grid[y][x] == 2) {a
+////                    simulation.addPlayerSpawnPoint(new Vector2(x, y));
+////                    continue;
+////                }
+//
+//                int width = 1;
+//                while (x + width < cols &&
+//                    grid[y][x + width] == 1 &&
+//                    !used[y][x + width]) {
+//                    width++;
 //                }
-
-                int width = 1;
-                while (x + width < cols &&
-                    grid[y][x + width] == 1 &&
-                    !used[y][x + width]) {
-                    width++;
-                }
-
-                // ---- Expand vertically ----
-                int height = 1;
-                boolean canExpand = true;
-                while (y + height < rows && canExpand) {
-
-                    for (int i = 0; i < width; i++) {
-                        if (grid[y + height][x + i] == 0 ||
-                            used[y + height][x + i]) {
-                            canExpand = false;
-                            break;
-                        }
-                    }
-
-                    if (canExpand) height++;
-                }
-
-                for (int dy = 0; dy < height; dy++) {
-                    for (int dx = 0; dx < width; dx++) {
-                        used[y + dy][x + dx] = true;
-                    }
-                }
-
-                walls.add(LoadUtillities.createMergedWall(world, x, y, width, height));
-            }
-        }
-        return walls;
-    }
+//
+//                // ---- Expand vertically ----
+//                int height = 1;
+//                boolean canExpand = true;
+//                while (y + height < rows && canExpand) {
+//
+//                    for (int i = 0; i < width; i++) {
+//                        if (grid[y + height][x + i] == 0 ||
+//                            used[y + height][x + i]) {
+//                            canExpand = false;
+//                            break;
+//                        }
+//                    }
+//
+//                    if (canExpand) height++;
+//                }
+//
+//                for (int dy = 0; dy < height; dy++) {
+//                    for (int dx = 0; dx < width; dx++) {
+//                        used[y + dy][x + dx] = true;
+//                    }
+//                }
+//
+//                walls.add(LoadUtillities.createMergedWall(world, x, y, width, height));
+//            }
+//        }
+//        return walls;
+//    }
 
     public static ArrayList<Vector2> getPlayerSpawnPoints(int[][] grid) {
         ArrayList<Vector2> myList = new ArrayList<>();

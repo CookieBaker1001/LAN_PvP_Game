@@ -1,40 +1,41 @@
-package com.springer.knakobrak.net;
+package com.springer.knakobrak.net.multiplayerEntities;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.springer.knakobrak.net.messages.DisconnectMessage;
+import com.springer.knakobrak.net.messages.LeaveAcceptMessage;
 import com.springer.knakobrak.net.messages.NetMessage;
 import com.springer.knakobrak.serialization.NetworkRegistry;
-import com.springer.knakobrak.world.PlayerState;
-import com.springer.knakobrak.world.ServerMessage;
+import com.springer.knakobrak.world.Player;
+import com.springer.knakobrak.util.ServerMessage;
 
 import java.io.IOException;
 import java.net.Socket;
 
 public class ClientHandler implements Runnable {
 
-    private GameServer server;
-
-    public int id;
-    public String name;
-
+    private Server server;
     private final Socket socket;
-    private final Kryo kryo;
 
+    private final Kryo kryo;
     private final Input in;
     private final Output out;
 
+    public int id;
+    public String username;
     public boolean isHost;
-
     private volatile boolean connected;
-    private volatile boolean disconnectRequested = false;
-
-    public PlayerState playerState;
+    private volatile boolean disconnectRequested;
 
     public int lastProcessedInput = 0;
 
-    ClientHandler(GameServer server, Socket socket) throws IOException {
+    public boolean ready;
+    public long ping = 1000;
+
+    public Player player;
+
+    public ClientHandler(Server server, Socket socket) throws IOException {
         this.server = server;
         this.socket = socket;
 
@@ -46,6 +47,11 @@ public class ClientHandler implements Runnable {
         out = new Output(socket.getOutputStream());
 
         connected = true;
+        disconnectRequested = false;
+
+        isHost = false;
+        ready = false;
+        id = 0;
     }
 
     @Override
@@ -53,51 +59,46 @@ public class ClientHandler implements Runnable {
         try {
             readLoop();
         } catch (IOException e) {
-            //System.err.println("CLIENT HANDLER CRASHED: " + id);
-            if (!disconnectRequested) e.printStackTrace();
+            e.printStackTrace();
         } finally {
-            //System.err.println("CLIENT HANDLER DISCONNECTING: " + id);
             cleanup();
-            //disconnect();
         }
     }
 
     private void readLoop() throws IOException {
         NetMessage msg;
-        while (connected) {
-            msg = (NetMessage) kryo.readClassAndObject(in);
-            //System.out.println("CH"+id+": RECV <- " + msg.getClass().getSimpleName());
-            server.enqueue(new ServerMessage(this, msg));
-
-            if (disconnectRequested) connected = false;
+        try {
+            while (connected) {
+                msg = (NetMessage) kryo.readClassAndObject(in);
+                server.enqueue(new ServerMessage(this, msg));
+                if (disconnectRequested) connected = false;
+            }
+        } catch (Exception e) {
+            System.out.println("ClientHandler("+id+") disconnected. (" + e.getMessage() + ")");
+            System.out.println("-Start of stacktrace-");
+            e.printStackTrace();
+            System.out.println("-End of stacktrace-");
         }
     }
 
     public void send(NetMessage msg) {
-        //System.out.println("CH"+id+": SEND -> " + msg.getClass().getSimpleName());
         synchronized (out) {
             kryo.writeClassAndObject(out, msg);
             out.flush();
         }
     }
 
-    public void requestDisconnect() {
+    public void sendDisconnect(LeaveAcceptMessage lam) {
+        System.out.println("ClientHandler is disconnecting!");
+        synchronized (out) {
+            kryo.writeClassAndObject(out, lam);
+            out.flush();
+        }
         disconnectRequested = true;
-        try {
-            DisconnectMessage dcm = new DisconnectMessage();
-            send(dcm);
-        } catch (Exception ignored) {}
-    }
-
-    public void disconnect() {
-        disconnectRequested = true;
-        connected = false;
-        cleanup();
     }
 
     private void cleanup() {
         connected = false;
-
         try { in.close(); } catch (Exception ignored) {}
         try { out.close(); } catch (Exception ignored) {}
         try { socket.close(); } catch (Exception ignored) {}

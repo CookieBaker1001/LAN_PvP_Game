@@ -4,49 +4,50 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
-import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
-import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
-import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.springer.knakobrak.LanPvpGame;
-import com.springer.knakobrak.local.SkinSelector;
-import com.springer.knakobrak.net.GameClient;
-import com.springer.knakobrak.net.GameServer;
-import com.springer.knakobrak.net.messages.JoinMessage;
+import com.springer.knakobrak.local.SoundManager;
 import com.springer.knakobrak.world.PhysicsSimulation;
-
-import java.io.IOException;
 
 public class MainMenuScreen implements Screen {
 
     private final LanPvpGame game;
+    private final SpriteBatch batch;
+    private final Skin uiSkin;
+    private final SoundManager soundManager;
+
     private Stage stage;
     private Table root;
-    private TextureAtlas skinAtlas;
-    private TextureAtlas ballAtlas;
+
     private final Texture background;
 
     private Viewport worldViewPort;
 
-    public MainMenuScreen(LanPvpGame game) {
+    public MainMenuScreen(LanPvpGame game, SpriteBatch batch, Skin uiSkin, SoundManager soundManager) {
+        System.out.println("[MainMenuScreen constructor]");
         this.game = game;
-        this.background = new Texture("misc/great_war.png");
+        this.batch = batch;
+        this.uiSkin = uiSkin;
+        this.soundManager = soundManager;
+
+        background = new Texture("misc/great_war.png");
         if (game.simulation != null) {
             game.simulation.resetSimulation();
         }
-        else game.simulation = new PhysicsSimulation();
+        else game.simulation = new PhysicsSimulation("Client");
     }
 
     @Override
     public void show() {
+
         worldViewPort = new FitViewport(1280, 720);
-        stage = new Stage(new FitViewport(1280, 720));
+        stage = new Stage(worldViewPort);
         Gdx.input.setInputProcessor(stage);
 
         root = new Table();
@@ -54,121 +55,87 @@ public class MainMenuScreen implements Screen {
         root.center();
         stage.addActor(root);
 
+        Label titleLabel = new Label("LAN Pvp Game", uiSkin);
+        titleLabel.setFontScale(5f);
+        TextButton startButton = new TextButton("Start", uiSkin);
+        TextButton optionsButton = new TextButton("Options", uiSkin);
+        TextButton quitButton = new TextButton("Quit", uiSkin);
 
-        skinAtlas = new TextureAtlas("skins/character_skins.atlas");
-        Array<Drawable> skins = new Array<>();
-        for (TextureAtlas.AtlasRegion region : skinAtlas.getRegions()) {
-            skins.add(new TextureRegionDrawable(region));
-        }
-        SkinSelector skinSelector = new SkinSelector(game.uiSkin, skins, 1);
+        Table topBar = new Table();
+        topBar.add(titleLabel).center().expandX();
 
-        ballAtlas = new TextureAtlas("skins/balls_skins.atlas");
-        Array<Drawable> balls = new Array<>();
-        for (TextureAtlas.AtlasRegion region : ballAtlas.getRegions()) {
-            balls.add(new TextureRegionDrawable(region));
-        }
-        SkinSelector ballSelector = new SkinSelector(game.uiSkin, balls, 2);
+        root.add(topBar).expandX().fillX().pad(25);
+        root.row();
 
-        Label titleLabel = new Label("Pvp Game", game.uiSkin);
+        root.add(startButton).width(140).height(45).pad(25);
+        root.row();
 
-        Label nameLabel = new Label("Name:", game.uiSkin);
-        TextField nameInput = new TextField(game.username, game.uiSkin);
+        root.add(optionsButton).width(140).height(45).pad(25);
+        root.row();
 
-        Label portLabel = new Label("Port:", game.uiSkin);
-        TextField portInput = new TextField("" + game.port, game.uiSkin);
+        root.add(quitButton).width(140).height(45).pad(25);
+        root.row();
 
-        Label statusLabel = new Label("", game.uiSkin);
+        Table bottomBar = new Table();
 
-        TextButton hostButton = new TextButton("Host game", game.uiSkin);
-        TextButton joinButton = new TextButton("Join Game", game.uiSkin);
-        TextButton optionsButton = new TextButton("Options", game.uiSkin);
+        TextButton statusButton = new TextButton("Status (Check console)", uiSkin);
 
+        Label versionLabel = new Label("v 1.0.0", uiSkin);
+        versionLabel.setFontScale(1.5f);
+        bottomBar.add(versionLabel).left().expandX();
+        Label companyLabel = new Label("KnaKoBraK AB", uiSkin);
+        companyLabel.setFontScale(1.5f);
+        bottomBar.add(companyLabel).right().expandX();
+        bottomBar.add(statusButton).right().expandX();
 
+        root.add(bottomBar).expandX().fillX().pad(30);
 
-        titleLabel.setFontScale(3.5f);
-        root.add(titleLabel).center().padBottom(30);
-        root.row().padTop(10).padBottom(10);
-
-        root.add(skinSelector.getRoot()).left();
-        root.add(ballSelector.getRoot()).right();
-        root.row().padTop(10);
-
-        root.add(nameLabel).right().padRight(10);
-        root.add(nameInput).width(300).height(40);
-        root.row().padTop(10);
-
-        root.add(portLabel).right().padRight(10);
-        root.add(portInput).width(300).height(40);
-        root.row().padTop(30);
-
-        root.add(statusLabel).width(140).height(45);
-        root.row().padTop(30);
-
-        root.add(hostButton).width(140).height(45).padRight(20);
-        root.add(joinButton).width(140).height(45).padRight(20);
-        root.add(optionsButton).width(140).height(45);
-
-        //root.setDebug(true);
-
-
-
-        hostButton.addListener(new ChangeListener() {
+        startButton.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
-                game.port = Integer.parseInt(portInput.getText());
-                game.username = nameInput.getText();
-                game.playerIcon = skinSelector.getSelectedIndex();
-                game.ballIcon = ballSelector.getSelectedIndex();
-                try {
-                    game.hostedServer = new GameServer(game.port);
-                    game.serverThread = new Thread(game.hostedServer, "GameServer");
-                    game.serverThread.start();
-
-                    game.client = new GameClient(game, "localhost", game.port);
-                    game.clientThread = new Thread(game.client, "GameClient");
-                    game.clientThread.start();
-
-                    JoinMessage msg = new JoinMessage();
-                    msg.playerName = game.username;
-                    msg.playerIcon = game.playerIcon;
-                    msg.ballIcon = game.ballIcon;
-                    game.client.send(msg);
-
-                    game.setScreen(new LobbyScreen(game, true));
-                } catch (IOException e) {
-                    statusLabel.setText("Port is busy");
-                }
+                game.setScreen(new LobbyScreen(game, batch, uiSkin, soundManager));
             }
         });
 
-        joinButton.addListener(new ChangeListener() {
+        optionsButton.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
-                game.port = Integer.parseInt(portInput.getText());
-                game.username = nameInput.getText();
-                game.playerIcon = skinSelector.getSelectedIndex();
-                game.ballIcon = ballSelector.getSelectedIndex();
-                try {
-                    game.client = new GameClient(game, "localhost", game.port);
-                    game.clientThread = new Thread(game.client, "GameClient");
-                    game.clientThread.start();
+                game.setScreen(new OptionsScreen(game, batch, uiSkin, soundManager));
+            }
+        });
 
-                    JoinMessage msg = new JoinMessage();
-                    msg.playerName = game.username;
-                    msg.playerIcon = game.playerIcon;
-                    msg.ballIcon = game.ballIcon;
-                    game.client.send(msg);
+        quitButton.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                System.exit(0);
+            }
+        });
 
-                    game.setScreen(new LobbyScreen(game, false));
-                } catch (IOException e) {
-                    statusLabel.setText("Failed to connect");
-                }
+        statusButton.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                game.logAll();
             }
         });
     }
 
     @Override
     public void render(float delta) {
+        game.dispatchNetworkMessages();
+        input(delta);
+        logic();
+        draw(delta);
+    }
+
+    private void input(float delta) {
+
+    }
+
+    private void logic() {
+
+    }
+
+    private void draw(float delta) {
         //ScreenUtils.clear(Color.BLACK);
 
         Gdx.gl.glClearColor(0, 0, 0, 1);
@@ -177,12 +144,12 @@ public class MainMenuScreen implements Screen {
         //game.viewport.apply();
         //game.batch.setProjectionMatrix(game.viewport.getCamera().combined);
         worldViewPort.apply();
-        game.batch.setProjectionMatrix(worldViewPort.getCamera().combined);
+        batch.setProjectionMatrix(worldViewPort.getCamera().combined);
 
-        game.batch.begin();
+        batch.begin();
 
-        game.batch.draw(background, 0, 0, worldViewPort.getWorldWidth(), worldViewPort.getWorldHeight());
-        game.batch.end();
+        batch.draw(background, 0, 0, worldViewPort.getWorldWidth(), worldViewPort.getWorldHeight());
+        batch.end();
 
         stage.act(delta);
         stage.draw();
@@ -212,7 +179,6 @@ public class MainMenuScreen implements Screen {
     @Override
     public void dispose() {
         background.dispose();
-        skinAtlas.dispose();
         stage.dispose();
     }
 }

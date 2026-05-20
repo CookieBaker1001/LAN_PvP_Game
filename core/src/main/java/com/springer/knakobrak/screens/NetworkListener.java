@@ -1,4 +1,4 @@
-package com.springer.knakobrak.net;
+package com.springer.knakobrak.screens;
 
 import com.springer.knakobrak.net.messages.NetMessage;
 
