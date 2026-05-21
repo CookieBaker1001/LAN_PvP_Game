@@ -1,11 +1,8 @@
 package com.springer.knakobrak.net.messages;
 
+// SENT FROM CLIENT
+// Sent from a client that wants to disconnect
 public class DisconnectMessage extends NetMessage {
-    // Sent from a client who wants to disconnect
-
-    public int playerId;
     public String reason = "Unknown";
-
-    public DisconnectMessage() {
-    }
+    public DisconnectMessage() {}
 }

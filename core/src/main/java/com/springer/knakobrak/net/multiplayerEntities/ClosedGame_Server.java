@@ -81,6 +81,10 @@ public class ClosedGame_Server implements Server {
 
     private final long TICK_MS = 16;
     private float SERVER_TICK_SPEED = 1f / 60f;
+
+    private float broadCastAccumulator = 0f;
+    private final float broadCastRate = 1 / 20f;
+
     private void gameLoop() {
         while (running) {
             processServerMessages();
@@ -88,6 +92,7 @@ public class ClosedGame_Server implements Server {
                 accumulator_1 += SERVER_TICK_SPEED;
                 accumulator_5 += SERVER_TICK_SPEED;
                 elapsedTime += SERVER_TICK_SPEED;
+                broadCastAccumulator += SERVER_TICK_SPEED;
 
                 if (accumulator_1 >= 1f) {
                     accumulator_1 = accumulator_1 - 1f;
@@ -97,6 +102,10 @@ public class ClosedGame_Server implements Server {
                 if (accumulator_5 >= 5f) {
                     accumulator_5 -= 5f;
                     doSomethingEvery5Seconds();
+                }
+                if (broadCastAccumulator >= broadCastRate) {
+                    broadcastGameState();
+                    broadCastAccumulator -= broadCastRate;
                 }
             }
             else if (serverState == ServerState.LOADING) {
@@ -108,12 +117,17 @@ public class ClosedGame_Server implements Server {
         }
     }
 
+    private void broadcastGameState() {
+        WorldStateMessage wsm = constructWorldStateMessage();
+        broadcast(wsm);
+    }
+
     Map<ClientHandler, Boolean> readyClients = new HashMap<ClientHandler, Boolean>();
     private void tryToGoFormLoadingToGameScreen() {
         everyOneIsLoaded = getEveryOneIsLoadedStatus();
         if (!everyOneIsLoaded) return;
         moveToNewServerState(ServerState.GAME);
-        AllResourcesLoadedMessage dlam = new AllResourcesLoadedMessage();
+        AllResourcesLoadedAcknowledgedMessage dlam = new AllResourcesLoadedAcknowledgedMessage();
         broadcast(dlam);
     }
 
@@ -343,7 +357,9 @@ public class ClosedGame_Server implements Server {
     }
 
     private void handleLeaveGameMessage(ClientHandler sender, LeaveGameMessage lgm) {
-
+        System.out.println("Disconnecting all from server!");
+        moveToNewServerState(ServerState.LOBBY);
+        shutdown();
     }
 
     private void handleChatMessage(ClientHandler sender, ChatMessage cm) {
