@@ -118,7 +118,7 @@ public class LoadingScreen implements Screen, NetworkListener {
     }
 
     private boolean receivedPlayerData = false;
-    private boolean receivedWorldData = true;
+    private boolean receivedWorldData = true; // for now the world data is not needed
     private void requestResources() {
         if (!receivedPlayerData) {
             game.client.send(new GetPlayerDataMessage());

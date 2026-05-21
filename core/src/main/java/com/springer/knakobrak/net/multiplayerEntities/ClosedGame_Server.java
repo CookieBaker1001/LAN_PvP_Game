@@ -2,10 +2,13 @@ package com.springer.knakobrak.net.multiplayerEntities;
 
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.*;
+import com.springer.knakobrak.world.PhysicsSimulation;
+import com.springer.knakobrak.world.Player;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,15 +33,19 @@ public class ClosedGame_Server implements Server {
 
     private ServerState serverState;
 
+    private PhysicsSimulation simulation;
+
     public ClosedGame_Server(int port, long key) throws IOException {
         this.port = port;
         this.hostKey = key;
 
         serverType = ServerType.LOBBIED;
-        serverSocket = new ServerSocket(port);
+        serverSocket = new ServerSocket(this.port);
         running = true;
         shutdownRequested = false;
         idPool = new IdPool();
+        simulation = new PhysicsSimulation("Server");
+
         serverState = ServerState.LOBBY;
     }
 
@@ -83,9 +90,8 @@ public class ClosedGame_Server implements Server {
                 elapsedTime += SERVER_TICK_SPEED;
 
                 if (accumulator_1 >= 1f) {
-                    accumulator_1 -= 1f;
+                    accumulator_1 = accumulator_1 - 1f;
                     secondCounter++;
-                    System.out.println("[Time]: " + secondCounter);
                     doSomethingEverySecond();
                 }
                 if (accumulator_5 >= 5f) {
@@ -96,14 +102,30 @@ public class ClosedGame_Server implements Server {
             else if (serverState == ServerState.LOADING) {
                 tryToGoFormLoadingToGameScreen();
             }
+            try {
+                Thread.sleep(TICK_MS);
+            } catch (InterruptedException e) {}
         }
     }
 
+    Map<ClientHandler, Boolean> readyClients = new HashMap<ClientHandler, Boolean>();
     private void tryToGoFormLoadingToGameScreen() {
+        everyOneIsLoaded = getEveryOneIsLoadedStatus();
         if (!everyOneIsLoaded) return;
         moveToNewServerState(ServerState.GAME);
         AllResourcesLoadedMessage dlam = new AllResourcesLoadedMessage();
         broadcast(dlam);
+    }
+
+    private boolean getEveryOneIsLoadedStatus() {
+        boolean status = true;
+        for (Boolean b : readyClients.values()) {
+            if (!b) {
+                status = false;
+                break;
+            }
+        }
+        return status;
     }
 
     private void moveToNewServerState(ServerState state) {
@@ -115,7 +137,7 @@ public class ClosedGame_Server implements Server {
     }
 
     private void doSomethingEverySecond() {
-
+        System.out.println("[Time]: " + secondCounter);
     }
 
     private void doSomethingEvery5Seconds() {
@@ -139,6 +161,7 @@ public class ClosedGame_Server implements Server {
     }
 
     private void handleLobbyMessages(ClientHandler sender, NetMessage msg) {
+        System.out.println("[ClosedGame_Server(Lobby message)]");
         switch (msg) {
             case JoinMessage jm -> handleJoinMessage(sender, jm);
             case LeaveLobbyMessage llm -> handleLeaveLobbyMessage(sender, llm);
@@ -146,7 +169,7 @@ public class ClosedGame_Server implements Server {
             case EveryOneIsReadyMessage eirm -> handleEveryOneIsReadyMessage(eirm);
             //case LeaveGameMessage lgm -> handleLeaveGameMessage(sender, lgm);
             default -> {
-                System.out.println("[ClosedGame_Server(Lobby)]: Unknown message type: " + msg.getClass());
+                System.out.println("[ClosedGame_Server(Lobby message)]: Unknown message type: " + msg.getClass());
             }
         }
     }
@@ -174,6 +197,8 @@ public class ClosedGame_Server implements Server {
         GameCanStartStatusMessage gcsm = new GameCanStartStatusMessage();
         gcsm.canStart = getReadyStatus();
         host.send(gcsm);
+
+        readyClients.remove(sender);
     }
 
     private void handleJoinMessage(ClientHandler sender, JoinMessage jm) {
@@ -207,6 +232,8 @@ public class ClosedGame_Server implements Server {
         GameCanStartStatusMessage gcsm = new GameCanStartStatusMessage();
         gcsm.canStart = getReadyStatus();
         host.send(gcsm);
+
+        readyClients.put(sender, false);
     }
 
     private boolean getReadyStatus() {
@@ -222,11 +249,83 @@ public class ClosedGame_Server implements Server {
     }
 
     private void handleLoadingMessages(ClientHandler sender, NetMessage msg) {
-        System.out.println("[ClosedGame_Server(Loading)]");
+        System.out.println("[ClosedGame_Server(Loading message)]");
+        switch(msg) {
+            case GetPlayerDataMessage gpdm -> handleGetPlayerDataMessage(sender, gpdm);
+            case GetMapDataMessage gmdm -> handleGetMapDataMessage(sender, gmdm);
+            case AllResourcesLoadedMessage arlm -> handleAllResourcesLoadedMessage(sender, arlm);
+            default -> {
+                System.out.println("[ClosedGame_Server(Loading message)]: Unknown message type: " + msg.getClass());
+            }
+        }
+    }
+
+    private void handleAllResourcesLoadedMessage(ClientHandler sender, AllResourcesLoadedMessage arlm) {
+        AllResourcesLoadedAcknowledgedMessage arlam = new AllResourcesLoadedAcknowledgedMessage();
+        sender.send(arlam);
+
+        Player p = new Player();
+        p.id = sender.id;
+        simulation.addPlayer(sender.id, p);
+
+//        ChatMessage cm = new ChatMessage();
+//        cm.message = "<SERVER>" + sender.username + " joined the game.";
+//        broadcast(cm);
+
+        PlayerListMessage plm = PlayerListItem.constructPlayerList(clients);
+        broadcast(plm);
+
+        WorldStateMessage wsm = constructWorldStateMessage();
+        broadcast(wsm);
+
+        readyClients.put(sender, true);
+    }
+
+    private WorldStateMessage constructWorldStateMessage() {
+        WorldStateMessage wsm = new WorldStateMessage();
+        int s = idPool.getConnectedPlayers();
+        wsm.ids = new int[s];
+        wsm.x = new float[s];
+        wsm.y = new float[s];
+        int i = 0;
+        for (Player p : simulation.players.values()) {
+            wsm.ids[i] = p.id;
+            wsm.x[i] = p.x;
+            wsm.y[i] = p.y;
+            i++;
+        }
+        String st = "World state";
+        for (Player p : simulation.players.values()) {
+            st += "ID: " + p.id + ", (" + p.x + "," + p.y + ")";
+        }
+        System.out.println(st);
+        return wsm;
+    }
+
+    private void handleGetPlayerDataMessage(ClientHandler sender, GetPlayerDataMessage gpdm) {
+        PlayerStateMessage psm = new PlayerStateMessage();
+        int s = idPool.getConnectedPlayers();
+        psm.ids = new int[s];
+        psm.x = new float[s];
+        psm.y = new float[s];
+        int i = 0;
+        for (Player p : simulation.players.values()) {
+            psm.ids[i] = p.id;
+            psm.x[i] = p.x;
+            psm.y[i] = p.y;
+            i++;
+        }
+        sender.send(psm);
+    }
+
+    private void handleGetMapDataMessage(ClientHandler sender, GetMapDataMessage gmdm) {
+
     }
 
     private void handleGameMessages(ClientHandler sender, NetMessage msg) {
+        //System.out.println("[ClosedGame_Server(Game message)]");
         switch (msg) {
+            case PlayerWASDMessage pwasdm -> handlePlayerWASDMessage(sender, pwasdm);
             case LeaveGameMessage lgm -> handleLeaveGameMessage(sender, lgm);
             case ChatMessage cm -> handleChatMessage(sender, cm);
             default -> {
@@ -235,12 +334,21 @@ public class ClosedGame_Server implements Server {
         }
     }
 
+    private void handlePlayerWASDMessage(ClientHandler sender, PlayerWASDMessage pwasdm) {
+        System.out.println("PlayerWASDMessage! ID: " + sender.id);
+        Player p = simulation.getPlayer(sender.id);
+        if (p == null) return;
+        p.x = pwasdm.x;
+        p.y = pwasdm.y;
+    }
+
     private void handleLeaveGameMessage(ClientHandler sender, LeaveGameMessage lgm) {
 
     }
 
     private void handleChatMessage(ClientHandler sender, ChatMessage cm) {
-
+        cm.message = "<" + sender.username + ">" + cm.message;
+        broadcast(cm);
     }
 
     private void disconnectClient(ClientHandler client) {
