@@ -152,10 +152,21 @@ public class ClosedGame_Server implements Server {
 
     private void doSomethingEverySecond() {
         System.out.println("[Time]: " + secondCounter);
+        pingClients();
+    }
+
+    private void pingClients() {
+        PingMessage pm = new PingMessage();
+        pm.secuence = secondCounter;
+        clients.values().forEach(c -> {
+            pm.pingTime = System.currentTimeMillis();
+            c.send(pm);
+        });
     }
 
     private void doSomethingEvery5Seconds() {
-
+        PlayerListMessage plm = PlayerListItem.constructPlayerList(clients);
+        broadcast(plm);
     }
 
     private void processServerMessages() {
@@ -312,7 +323,7 @@ public class ClosedGame_Server implements Server {
         for (Player p : simulation.players.values()) {
             st += "ID: " + p.id + ", (" + p.x + "," + p.y + ")";
         }
-        System.out.println(st);
+        //System.out.println(st);
         return wsm;
     }
 
@@ -342,10 +353,15 @@ public class ClosedGame_Server implements Server {
             case PlayerWASDMessage pwasdm -> handlePlayerWASDMessage(sender, pwasdm);
             case LeaveGameMessage lgm -> handleLeaveGameMessage(sender, lgm);
             case ChatMessage cm -> handleChatMessage(sender, cm);
+            case PingResponseMessage prm -> handlePingResponseMessage(sender, prm);
             default -> {
                 System.out.println("[ClosedGame_Server(Game)]: Unknown message type: " + msg.getClass());
             }
         }
+    }
+
+    private void handlePingResponseMessage(ClientHandler sender, PingResponseMessage prm) {
+        clients.get(prm.clientId).ping = (System.currentTimeMillis() - prm.pingTimeResponse);
     }
 
     private void handlePlayerWASDMessage(ClientHandler sender, PlayerWASDMessage pwasdm) {

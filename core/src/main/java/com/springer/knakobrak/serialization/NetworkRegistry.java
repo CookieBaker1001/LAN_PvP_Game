@@ -36,6 +36,10 @@ public final class NetworkRegistry {
         kryo.register(LoadingCompleteMessage.class);
         kryo.register(LobbyStateMessage.class);
         kryo.register(MapDataMessage.class);
+
+        kryo.register(PingMessage.class);
+        kryo.register(PingResponseMessage.class);
+
         kryo.register(PlayerDeathMessage.class);
         kryo.register(PlayerHealthMessage.class);
         kryo.register(PlayerInputMessage.class);

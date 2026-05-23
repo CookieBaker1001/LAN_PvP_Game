@@ -1,7 +1,5 @@
 package com.springer.knakobrak.net.multiplayerEntities;
 
-import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.physics.box2d.Body;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.*;
 import com.springer.knakobrak.world.*;
@@ -9,13 +7,10 @@ import com.springer.knakobrak.world.*;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-
-import static com.springer.knakobrak.util.Constants.*;
 
 public class OpenGame_Server implements Server {
 
@@ -42,6 +37,7 @@ public class OpenGame_Server implements Server {
         this.port = port;
         this.hostKey = hostKey;
 
+        serverType = ServerType.OPEN;
         serverSocket = new ServerSocket(port);
         running = true;
         shutdownRequested = false;
@@ -76,7 +72,8 @@ public class OpenGame_Server implements Server {
 
     private int secondCounter = 0;
     private float elapsedTime = 0f;
-    private float accumulator = 0f;
+    private float accumulator_1 = 0f;
+    private float accumulator_5 = 0f;
 
     private final long TICK_MS = 16;
     private float SERVER_TICK_SPEED = 1f / 60f;
@@ -88,12 +85,17 @@ public class OpenGame_Server implements Server {
         while (running) {
             processServerMessages();
             elapsedTime += SERVER_TICK_SPEED;
-            accumulator += SERVER_TICK_SPEED;
+            accumulator_1 += SERVER_TICK_SPEED;
+            accumulator_5 += SERVER_TICK_SPEED;
             broadCastAccumulator += SERVER_TICK_SPEED;
-            if (accumulator >= 1f) {
-                accumulator -= 1f;
+            if (accumulator_1 >= 1f) {
+                accumulator_1 -= 1f;
                 secondCounter++;
                 doSomethingEverySecond();
+            }
+            if (accumulator_5 >= 5f) {
+                accumulator_5 -= 5f;
+                doSomethingEvery5Seconds();
             }
             if (broadCastAccumulator >= broadCastRate) {
                 broadcastGameState();
@@ -108,6 +110,25 @@ public class OpenGame_Server implements Server {
 
     private void doSomethingEverySecond() {
         System.out.println("[Time]: " + secondCounter);
+        pingClients();
+    }
+
+    private void pingClients() {
+        PingMessage pm = new PingMessage();
+        pm.secuence = secondCounter;
+        clients.values().forEach(c -> {
+            pm.pingTime = System.currentTimeMillis();
+            c.send(pm);
+        });
+    }
+
+    private void doSomethingEvery5Seconds() {
+        updatePingList();
+    }
+
+    private void updatePingList() {
+        PlayerListMessage plm = PlayerListItem.constructPlayerList(clients);
+        broadcast(plm);
     }
 
     void processServerMessages() {
@@ -126,10 +147,15 @@ public class OpenGame_Server implements Server {
             case GetPlayerDataMessage gpdm -> handleGetPlayerDataMessage(sender, gpdm);
             case GetMapDataMessage gmdm -> handleGetMapDataMessage(sender, gmdm);
             case AllResourcesLoadedMessage arlm -> handleAllResourcesLoadedMessage(sender, arlm);
+            case PingResponseMessage prm -> handlePingResponseMessage(sender, prm);
             default -> {
                 System.out.println("Unknown message format: " + msg.getClass());
             }
         }
+    }
+
+    private void handlePingResponseMessage(ClientHandler sender, PingResponseMessage prm) {
+        clients.get(prm.clientId).ping = (System.currentTimeMillis() - prm.pingTimeResponse);
     }
 
     private void handleLeaveGameMessage(ClientHandler sender, LeaveGameMessage lgm) {
@@ -253,7 +279,7 @@ public class OpenGame_Server implements Server {
         for (Player p : simulation.players.values()) {
             st += "ID: " + p.id + ", (" + p.x + "," + p.y + ")";
         }
-        System.out.println(st);
+        //System.out.println(st);
         return wsm;
     }
 

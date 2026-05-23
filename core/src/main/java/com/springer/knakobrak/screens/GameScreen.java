@@ -12,10 +12,13 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.actions.Actions;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import com.badlogic.gdx.utils.Queue;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
@@ -23,6 +26,7 @@ import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.local.SoundManager;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.Constants;
+import com.springer.knakobrak.util.PingThresholds;
 import com.springer.knakobrak.world.*;
 
 import java.util.*;
@@ -50,14 +54,30 @@ public class GameScreen implements Screen, NetworkListener {
 
     private Label timeLabel;
     private Label coordinatesLabel;
-    private Label chatLog;
+
+    private Table mainTable;
+    private Table consoleArea;
+    private Table chatTable;
     private ScrollPane chatScroll;
     private TextField chatInput;
-    private Table rootTable;
+    private Queue<String> messages;
+
+    private Table consoleArea_History;
+    private Table chatTable_History;
+    private ScrollPane chatScroll_History;
+    private boolean chatMode = false;
+
+    private Table membersUiTable;
+    private Table membersTable;
+    private ScrollPane membersScroll;
+
+    private Table pauseMenu;
+    private boolean paused = false;
+    private Drawable tintedBG;
 
     private Table heartTable;
 
-    private boolean chatMode = false;
+    private final Texture[] ping;
 
     private PhysicsSimulation simulation;
     private Player player;
@@ -65,7 +85,6 @@ public class GameScreen implements Screen, NetworkListener {
     private Map<Integer, Texture> ballSkins = new HashMap<>();
 
     private float localTime = 0f;
-    private boolean paused = false;
 
     OrthographicCamera cam;
     float camAngleDeg = 0f;
@@ -86,6 +105,13 @@ public class GameScreen implements Screen, NetworkListener {
         //game.soundManager.playMusic("game", true);
         //simulation.setSimulationOwner(this);
 
+        messages = new Queue<>();
+        tintedBG = uiSkin.newDrawable("white", 0, 0, 0, 0.5f);
+        ping = new Texture[6];
+        for (int i = 0; i < 6; i++) {
+            ping[i] = new Texture(Gdx.files.internal("ping/ping"+i+".png"));
+        }
+
         for (Player ps : simulation.players.values()) {
             System.out.println(ps.body == null ? "Player body "+ps.id+" is null" : "Player body "+ps.id+" is not null");
         }
@@ -104,62 +130,58 @@ public class GameScreen implements Screen, NetworkListener {
         heartTexture = new Texture("tiles/heart.png");
         background = new Texture("misc/grass_bg.png");
 
-        rootTable = new Table();
-        rootTable.setFillParent(true);
-        rootTable.center();
-        stage.addActor(rootTable);
+        mainTable = new Table();
+        mainTable.setFillParent(true);
+        mainTable.center();
+        stage.addActor(mainTable);
 
+        Table topBar = createTopBar();
+        mainTable.add(topBar).expandX().fillX().pad(10);
+        mainTable.row();
 
-        coordinatesLabel = new Label("x: 0.0, y: 0.0", uiSkin);
-        coordinatesLabel.setFontScale(1.5f);
-        timeLabel = new Label("Time: 0.0s", uiSkin);
-        heartTable = createHealthBar(MAX_HEALTH, heartTexture);
+        Stack stack = createConsoleArea();
+        mainTable.add(stack).width(500).left().bottom();
+        mainTable.add(new Table()).expand().right();
 
-        Table topBar = new Table();
-        topBar.add(coordinatesLabel).left().expandX();
-        topBar.add(timeLabel).center().expandX();
-        topBar.add(heartTable).right().expandX();
+        createMembersTable();
 
-        rootTable.add(topBar).expandX().fillX().pad(10);
-        rootTable.row();
+        pauseMenu = new Table();
+        pauseMenu.setFillParent(true);
+        pauseMenu.center();
+        stage.addActor(pauseMenu);
 
+        Table pauseMenuFrame = new Table();
+        pauseMenuFrame.setFillParent(true);
+        pauseMenuFrame.center();
+        stage.addActor(pauseMenuFrame);
 
-        Table middle = new Table();
-        middle.center();
+        pauseMenu = createPauseMenu();
+        pauseMenuFrame.add(pauseMenu).pad(5);
 
-        Table pauseMenu = createPauseMenu();
-        middle.add(pauseMenu).expand().fill().pad(50);
+//        mainTable.add(new Table()).expand().fill().pad(50);
+//        mainTable.row();
+//
+//        chatLogLabel = new Label("", uiSkin);
+//        chatLogLabel.setWrap(true);
+//
+//        chatScroll = new ScrollPane(chatLogLabel, uiSkin);
+//        chatScroll.setFadeScrollBars(false);
+//
+//        chatInput = new TextField("", uiSkin);
+//        chatInput.setAlignment(1);
+//        chatInput.setVisible(false);
+//
+//        Table bottomBar = new Table();
+//
+//        bottomBar.add(chatInput).width(300).height(40).left().pad(5);
+//        bottomBar.add(chatLogLabel).width(500).height(120).right().pad(5);
+//
+//        mainTable.add(bottomBar).expandX().fillX().bottom().pad(10);
 
-        rootTable.add(middle).expand().fill();
-        rootTable.row();
-
-        chatLog = new Label("", uiSkin);
-        chatLog.setWrap(true);
-
-        chatScroll = new ScrollPane(chatLog, uiSkin);
-        chatScroll.setFadeScrollBars(false);
-
-        chatInput = new TextField("", uiSkin);
-        chatInput.setAlignment(1);
-        chatInput.setVisible(false);
-
-
-        Table bottomBar = new Table();
-
-        bottomBar.add(chatInput).width(300).height(40).left().pad(5);
-        //bottomBar.add(chatScroll).expandX().height(120).pad(5);
-        bottomBar.add(chatLog).width(500).height(120).right().pad(5);
-
-        rootTable.add(bottomBar).expandX().fillX().bottom().pad(10);
-
-
-
-//        rootTable.add(chatInput).width(400).height(30).left().bottom().padBottom(30);
-//        rootTable.add(new Label("", game.uiSkin));
-//        rootTable.add(chatScroll).width(400).height(150).right().bottom().padBottom(30);
-
-        //rootTable.setDebug(true);
-
+        consoleArea.setVisible(false);
+        consoleArea_History.setVisible(true);
+        pauseMenu.setVisible(false);
+        membersUiTable.setVisible(false);
 
         shapeRenderer = new ShapeRenderer();
         int i = 0;
@@ -170,25 +192,96 @@ public class GameScreen implements Screen, NetworkListener {
             i++;
         }
         deadPlayer = playerSkinsAttlas.findRegion("pDead");
+
+        mainTable.setDebug(true);
     }
 
-    private Table pauseTable;
-    private Table createPauseMenu() {
-        pauseTable = new Table();
-        pauseTable.setBackground(createDimBackground());
+    private Table createTopBar() {
+        coordinatesLabel = new Label("x: 0.0, y: 0.0", uiSkin);
+        coordinatesLabel.setFontScale(1.5f);
+        timeLabel = new Label("Time: 0.0s", uiSkin);
+        heartTable = createHealthBar(MAX_HEALTH, heartTexture);
 
+        Table topBar = new Table();
+        Table topLeft = new Table();
+        topLeft.add(coordinatesLabel);
+        topLeft.row();
+        topLeft.add(timeLabel);
+        topBar.add(topLeft).left().expandX();
+        topBar.add(heartTable).right().expandX();
+        return topBar;
+    }
+
+    private void createMembersTable() {
+        membersUiTable = new Table();
+        membersUiTable.setFillParent(true);
+        membersUiTable.center().top();
+        stage.addActor(membersUiTable);
+
+        membersTable = new Table();
+        membersScroll = new ScrollPane(membersTable, uiSkin);
+        membersScroll.setFadeScrollBars(false);
+        membersUiTable.add(membersTable).center().top();
+    }
+
+    private Stack createConsoleArea() {
+        Stack stack = new Stack();
+
+        consoleArea_History = new Table();
+        consoleArea_History.setFillParent(true);
+        consoleArea_History.center();
+        stage.addActor(consoleArea_History);
+
+        Table chatArea_History = new Table();
+        chatTable_History = new Table();
+        chatTable_History.bottom().left();
+
+        chatScroll_History = new ScrollPane(chatTable_History, uiSkin);
+        chatScroll_History.setFadeScrollBars(false);
+        chatArea_History.add(chatTable_History).expand().fill();
+        consoleArea_History.add(chatArea_History).fillX().expandX().padBottom(70);
+
+        consoleArea = new Table();
+        Table chatArea = new Table();
+        chatTable = new Table();
+        chatTable.bottom().left();
+
+        chatScroll = new ScrollPane(chatTable, uiSkin);
+        chatScroll.setFadeScrollBars(false);
+        chatArea.add(chatTable).expand().fill();
+        consoleArea.add(chatArea).center();
+        consoleArea.row();
+
+        Table chatInputArea = new Table();
+
+        chatInput = new TextField("", uiSkin);
+        chatInput.setAlignment(1);
+        chatInputArea.add(chatInput).fillX().expandX().height(45).left();
+
+        consoleArea.add(chatInputArea).fillX().expandX().padBottom(25);
+        stack.add(consoleArea);
+        stack.add(consoleArea_History);
+
+        return stack;
+    }
+
+    private Table createPauseMenu() {
+        Table pauseTable = new Table();
+
+        Table row1 = new Table();
         Label pausedLabel = new Label("Paused <ESC>", uiSkin);
         pausedLabel.setFontScale(5f);
-        pauseTable.add(pausedLabel).center();
+        row1.add(pausedLabel).center().pad(25);
+        pauseTable.add(row1);
         pauseTable.row();
 
-        TextButton quitButton = new TextButton("Main menu", uiSkin);
-        pauseTable.add(quitButton).center().width(140).height(45).pad(25);
-
+        Table row2 = new Table();
+        TextButton quitButton = new TextButton("Exit", uiSkin);
+        row2.add(quitButton).center().width(140).height(45).pad(25);
         TextButton statusButton = new TextButton("Status (Check console)", uiSkin);
-        pauseTable.add(statusButton).center().width(140).height(45).pad(25);
-
-        pauseTable.setVisible(false);
+        row2.add(statusButton).center().width(140).height(45).pad(25);
+        pauseTable.add(row2);
+        pauseTable.setBackground(tintedBG);
 
         quitButton.addListener(new ChangeListener() {
             @Override
@@ -209,25 +302,12 @@ public class GameScreen implements Screen, NetworkListener {
         return pauseTable;
     }
 
-    private Drawable createDimBackground() {
-        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        pixmap.setColor(0, 0, 0, 0.4f); // 60% transparent black
-        pixmap.fill();
-
-        Texture texture = new Texture(pixmap);
-        pixmap.dispose();
-
-        return new TextureRegionDrawable(texture);
-    }
-
     private Table createHealthBar(int maxHp, Texture heartRegion) {
         Table hearts = new Table();
-
         for (int i = 0; i < maxHp; i++) {
             Image heart = new Image(new TextureRegionDrawable(heartRegion));
             hearts.add(heart).size(24).padLeft(4);
         }
-
         return hearts;
     }
 
@@ -238,9 +318,7 @@ public class GameScreen implements Screen, NetworkListener {
         }
     }
 
-
     float FIXED_DT = 1 / 60f;
-
     float physicsAccumulator = 0f;
 
     int secondsCounter = 0;
@@ -256,8 +334,10 @@ public class GameScreen implements Screen, NetworkListener {
 
     private void enterChatMode() {
         Gdx.input.setCursorCatched(false);
-        chatInput.setVisible(true);
         stage.setKeyboardFocus(chatInput);
+
+        consoleArea.setVisible(chatMode);
+        consoleArea_History.setVisible(!chatMode);
     }
 
     private void exitChatMode(boolean send) {
@@ -272,13 +352,16 @@ public class GameScreen implements Screen, NetworkListener {
 
         if (rotateCameraMode) Gdx.input.setCursorCatched(true);
         chatInput.setText("");
-        chatInput.setVisible(false);
-        stage.unfocusAll();
+        stage.unfocus(chatInput);
+        stage.setKeyboardFocus(null);
+
+        consoleArea.setVisible(chatMode);
+        consoleArea_History.setVisible(!chatMode);
     }
 
     private void togglePause() {
         paused = !paused;
-        pauseTable.setVisible(paused);
+        pauseMenu.setVisible(paused);
 
         if (paused) {
             Gdx.input.setCursorCatched(false);
@@ -290,17 +373,17 @@ public class GameScreen implements Screen, NetworkListener {
     }
 
     private void input(float delta) {
-
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             if (chatMode) {
-                exitChatMode(false);
                 chatMode = false;
+                exitChatMode(false);
             } else {
                 togglePause();
             }
         }
         if (paused) return;
 
+        membersUiTable.setVisible(Gdx.input.isKeyPressed(Input.Keys.TAB));
         if (Gdx.input.isKeyJustPressed(Input.Keys.C)) game.logAll();
 
         Vector2 input = Vector2.Zero;
@@ -464,16 +547,55 @@ public class GameScreen implements Screen, NetworkListener {
             case ChatMessage cm -> handleChatMessage(cm);
             case LeaveAcceptMessage lam -> handleLeaveAcceptMessage(lam);
             case PlayerListMessage plm -> handlePlayerListMessage(plm);
+            case PingMessage pm -> handlePingMessage(pm);
             default -> {
                 //System.out.println("Unknown message format: " + msg.getClass());
             }
         }
     }
 
+    private void handlePingMessage(PingMessage pm) {
+        PingResponseMessage prm = new PingResponseMessage();
+        prm.clientId = game.client.id;
+        prm.sequenceResponse = pm.secuence;
+        prm.pingTimeResponse = pm.pingTime;
+        game.client.send(prm);
+    }
+
     private void handlePlayerListMessage(PlayerListMessage plm) {
+        membersTable.clear();
+        Label header = new Label("- Players -", uiSkin);
+        membersTable.add(header).pad(10);
+        membersTable.row();
+        //System.out.println("Ping");
         for (int i = 0; i < plm.ids.length; i++) {
-            System.out.println("["+plm.ids[i]+"]: '"+plm.names[i]+"'");
+            //System.out.println(plm.ids[i] + ": " + plm.pings[i]);
+            Label playerLabel = new Label("(" + plm.ids[i] + ") " + (plm.ids[i] == plm.hostId ? "(host) " : "") + plm.names[i], uiSkin);
+            playerLabel.setFontScale(1f);
+            Table row = new Table();
+            row.add(playerLabel).fillX().left().pad(1);
+            Image pingImage = getImage(plm, i);
+            row.add(pingImage).width(20).height(20).right().pad(1);
+            row.setBackground(tintedBG);
+            membersTable.add(row).expandX().fillX().pad(1);
+            membersTable.row();
         }
+        //System.out.println("End of Ping");
+        Gdx.app.postRunnable(() -> {
+            membersScroll.layout();
+            membersScroll.setScrollPercentY(1f);
+        });
+    }
+
+    private Image getImage(PlayerListMessage plm, int i) {
+        Image pingImage;
+        if (plm.pings[i] <= PingThresholds.PING_5) pingImage = new Image(ping[5]);
+        else if (plm.pings[i] <= PingThresholds.PING_4) pingImage = new Image(ping[4]);
+        else if (plm.pings[i] <= PingThresholds.PING_3) pingImage = new Image(ping[3]);
+        else if (plm.pings[i] <= PingThresholds.PING_2) pingImage = new Image(ping[2]);
+        else if (plm.pings[i] <= PingThresholds.PING_1) pingImage = new Image(ping[1]);
+        else pingImage = new Image(ping[0]);
+        return pingImage;
     }
 
     float counter = 0f;
@@ -508,11 +630,58 @@ public class GameScreen implements Screen, NetworkListener {
         }
     }
 
-    private void handleChatMessage(ChatMessage msg) {
-        chatLog.setText(chatLog.getText() + "\n" + msg.message);
+    private void handleChatMessage(ChatMessage cm) {
+        messages.addLast(cm.message);
+        //messages_History.addLast(new CustomPair<>(0f, true));
+        if (messages.size >= 11) messages.removeFirst();
+        //if (messages_History.size >= 11) messages_History.removeFirst();
+        addChatMessageToTable(chatTable, chatScroll);
+        //addChatMessageToTable(chatTable_History, chatScroll_History, 1);
+        addMessageToHistoryTable(cm.message);
+    }
+
+    public void addChatMessageToTable(Table table, ScrollPane scroll) {
+        table.clear();
+        for (String s : messages) {
+            Label messageLabel = new Label(s, uiSkin);
+            messageLabel.setFontScale(1.25f);
+            messageLabel.setWrap(true);
+            Table bubble = new Table(uiSkin);
+            bubble.add(messageLabel).pad(1).width(500);
+            bubble.setBackground(tintedBG);
+            table.add(bubble).expandX().fillX().pad(1);
+            table.row();
+        }
         Gdx.app.postRunnable(() -> {
-            chatScroll.layout();
-            chatScroll.setScrollPercentY(1f);
+            scroll.layout();
+            scroll.setScrollPercentY(1f);
+        });
+    }
+
+    private void addMessageToHistoryTable(String message) {
+        Label messageLabel = new Label(message, uiSkin);
+        messageLabel.setFontScale(1.25f);
+        messageLabel.setWrap(true);
+        Table bubble = new Table(uiSkin);
+        bubble.add(messageLabel).pad(1).width(500);
+        bubble.setBackground(tintedBG);
+        Table row = new Table();
+        row.add(bubble);
+        chatTable_History.add(row).expandX().fillX().pad(1);
+        row.addAction(Actions.sequence(
+            Actions.fadeIn(0.2f),
+            Actions.delay(10f),
+            Actions.fadeOut(0.5f),
+            Actions.removeActor()
+        ));
+        chatTable_History.row();
+//            .getActor().addAction(Actions.sequence(
+//            Actions.delay(10.7f),
+//            Actions.removeActor()
+//        ));
+        Gdx.app.postRunnable(() -> {
+            chatScroll_History.layout();
+            chatScroll_History.setScrollPercentY(1f);
         });
     }
 
