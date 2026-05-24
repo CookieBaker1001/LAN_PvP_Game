@@ -139,9 +139,15 @@ public class GameScreen implements Screen, NetworkListener {
         mainTable.add(topBar).expandX().fillX().pad(10);
         mainTable.row();
 
+        Table middleBar = new Table();
+        mainTable.add(middleBar).expand().fill();
+        mainTable.row();
+
+        Table bottomBar = new Table();
         Stack stack = createConsoleArea();
-        mainTable.add(stack).width(500).left().bottom();
-        mainTable.add(new Table()).expand().right();
+        bottomBar.add(stack).width(500).left().bottom();
+        bottomBar.add(new Table()).expand().right();
+        mainTable.add(bottomBar).expandX().fillX();
 
         createMembersTable();
 
@@ -465,7 +471,7 @@ public class GameScreen implements Screen, NetworkListener {
 
     private void doSomethingEverySecond() {
         //System.out.println("Time: " + secondsCounter);
-        simulation.playerStates();
+        //simulation.playerStates();
     }
 
     private void updateCoordinateLabel() {
@@ -540,8 +546,14 @@ public class GameScreen implements Screen, NetworkListener {
         background.dispose();
     }
 
+    int c = 0;
     @Override
     public void handleNetworkMessage(NetMessage msg) {
+        c++;
+        if (c >= 20) {
+            System.out.println("Type of message: " + msg.getClass().getSimpleName());
+            c -= 20;
+        }
         switch (msg) {
             case WorldStateMessage wsm -> handleWorldStateMessage(wsm);
             case ChatMessage cm -> handleChatMessage(cm);
@@ -600,12 +612,6 @@ public class GameScreen implements Screen, NetworkListener {
 
     float counter = 0f;
     private void handleWorldStateMessage(WorldStateMessage wsm) {
-        //System.out.println("WSM!");
-//        counter += 0.05f;
-//        if (counter >= 1f) {
-//            counter = 0f;
-//            System.out.println("Count: " + wsm.x.length);
-//        }
         for (int i = 0; i < wsm.x.length; i++) {
             Player p = simulation.getPlayer(wsm.ids[i]);
             if (p == null) {
@@ -613,6 +619,7 @@ public class GameScreen implements Screen, NetworkListener {
                 p.id = wsm.ids[i];
                 simulation.addPlayer(p.id, p);
             }
+            if (wsm.ids[i] == game.client.id) continue;
             p.x = wsm.x[i];
             p.y = wsm.y[i];
         }
@@ -632,11 +639,8 @@ public class GameScreen implements Screen, NetworkListener {
 
     private void handleChatMessage(ChatMessage cm) {
         messages.addLast(cm.message);
-        //messages_History.addLast(new CustomPair<>(0f, true));
         if (messages.size >= 11) messages.removeFirst();
-        //if (messages_History.size >= 11) messages_History.removeFirst();
         addChatMessageToTable(chatTable, chatScroll);
-        //addChatMessageToTable(chatTable_History, chatScroll_History, 1);
         addMessageToHistoryTable(cm.message);
     }
 

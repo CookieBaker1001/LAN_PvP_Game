@@ -193,6 +193,7 @@ public class OpenGame_Server implements Server {
     }
 
     private void handleAllResourcesLoadedMessage(ClientHandler sender, AllResourcesLoadedMessage arlm) {
+        System.out.println("Handle all resources loaded message");
         AllResourcesLoadedAcknowledgedMessage arlam = new AllResourcesLoadedAcknowledgedMessage();
         sender.send(arlam);
 
@@ -213,6 +214,7 @@ public class OpenGame_Server implements Server {
 
     private void handleJoinMessage(ClientHandler sender, JoinMessage jm) {
         System.out.println(jm.username + " (v." + jm.protocolVersion + ") just joined!");
+        simulation.playerStates();
         int id = idPool.acquire();
         if (id == -1) {
             denyClientEntry(sender);
@@ -236,6 +238,7 @@ public class OpenGame_Server implements Server {
         jam.isHost = sender.isHost;
         jam.serverType = serverType.ordinal();
         sender.send(jam);
+        simulation.playerStates();
         //broadcastPlayerList();
     }
 
@@ -262,6 +265,7 @@ public class OpenGame_Server implements Server {
         broadcast(wsm);
     }
 
+    int c = 0;
     private WorldStateMessage constructWorldStateMessage() {
         WorldStateMessage wsm = new WorldStateMessage();
         int s = idPool.getConnectedPlayers();
@@ -275,11 +279,15 @@ public class OpenGame_Server implements Server {
             wsm.y[i] = p.y;
             i++;
         }
-        String st = "World state";
-        for (Player p : simulation.players.values()) {
-            st += "ID: " + p.id + ", (" + p.x + "," + p.y + ")";
+        c++;
+        if (c >= 20) {
+            String st = "World state looks like this: ";
+            for (Player p : simulation.players.values()) {
+                st += "ID: " + p.id + ", (" + p.x + "," + p.y + ")";
+            }
+            System.out.println(st);
+            c -= 20;
         }
-        //System.out.println(st);
         return wsm;
     }
 

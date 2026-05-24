@@ -180,7 +180,10 @@ public class LobbyScreen implements Screen, NetworkListener {
         row1_c.add(portLabel).left().padRight(25);
         TextField portInput = new TextField("5000", uiSkin);
         portInput.setAlignment(1);
-        row1_c.add(portInput).width(100).height(45).right().pad(25);
+        row1_c.add(portInput).width(100).height(45).center().pad(25);
+        Label port1StatusLabel = new Label("", uiSkin);
+        port1StatusLabel.setFontScale(1.5f);
+        row1_c.add(port1StatusLabel).right().pad(15);
         createSection.add(row1_c);
         createSection.row();
 
@@ -210,7 +213,10 @@ public class LobbyScreen implements Screen, NetworkListener {
         row1_j.add(portLabel2).left().pad(25);
         TextField portInput2 = new TextField("5000", uiSkin);
         portInput2.setAlignment(1);
-        row1_j.add(portInput2).width(100).height(45).right().pad(25);
+        row1_j.add(portInput2).width(100).height(45).center().pad(25);
+        Label port2StatusLabel = new Label("", uiSkin);
+        port2StatusLabel.setFontScale(1.5f);
+        row1_j.add(port2StatusLabel).right().pad(15);
         joinSection.add(row1_j);
         joinSection.row();
 
@@ -220,7 +226,10 @@ public class LobbyScreen implements Screen, NetworkListener {
         row2_j.add(ipAddressLabel).left().pad(25);
         TextField hostInput = new TextField("localhost", uiSkin);
         hostInput.setAlignment(1);
-        row2_j.add(hostInput).width(200).height(45).right().pad(25);
+        row2_j.add(hostInput).width(200).height(45).center().pad(25);
+        Label hostStatusLabel = new Label("", uiSkin);
+        hostStatusLabel.setFontScale(1.5f);
+        row2_j.add(hostStatusLabel).right().pad(15);
         joinSection.add(row2_j);
         joinSection.row();
 
@@ -243,9 +252,7 @@ public class LobbyScreen implements Screen, NetworkListener {
                 joinGame("localhost", portInput);
             }
         });
-
         joinButton.setDisabled(!game.isServerRunning);
-        shutDownButton.setDisabled(!game.isServerRunning);
 
         shutDownButton.addListener(new ChangeListener() {
             @Override
@@ -258,6 +265,7 @@ public class LobbyScreen implements Screen, NetworkListener {
                 game.cleanup();
             }
         });
+        shutDownButton.setDisabled(!game.isServerRunning);
 
         createOpenGameButton.addListener(new ChangeListener() {
             @Override
@@ -268,7 +276,7 @@ public class LobbyScreen implements Screen, NetworkListener {
                     game.serverType = ServerType.OPEN;
                     initServer(true);
                 } catch (IOException e) {
-                    //statusLabel.setText("Port is busy");
+                    port1StatusLabel.setText("Port is busy!");
                     e.printStackTrace();
                 } finally {
                     joinButton.setDisabled(false);
@@ -278,6 +286,7 @@ public class LobbyScreen implements Screen, NetworkListener {
                 }
             }
         });
+        createOpenGameButton.setDisabled(game.isServerRunning);
 
         createLobbiedGameButton.addListener(new ChangeListener() {
             @Override
@@ -287,12 +296,12 @@ public class LobbyScreen implements Screen, NetworkListener {
                     game.generateRandomHostKey();
                     game.serverType = ServerType.LOBBIED;
                     initLobbiedServerProcess();
-                    //game.setScreen(new ClosedGame_LobbyScreen(game, batch, uiSkin, soundManager, true));
                 } catch (IOException e) {
-
+                    port1StatusLabel.setText("Port is busy!");
                 }
             }
         });
+        createLobbiedGameButton.setDisabled(game.isServerRunning);
 
         joinButton2.addListener(new ChangeListener() {
             @Override
@@ -323,13 +332,8 @@ public class LobbyScreen implements Screen, NetworkListener {
             case JoinAcceptMessage jam -> handleJoinAcceptMessage(jam);
             case LeaveAcceptMessage lam -> handleLeaveAcceptMessage(lam);
             case JoinRejectedMessage jdm -> handleJoinRejectedMessage(jdm);
-
             default -> {}
         }
-    }
-
-    private void handleGameCanStartMessage(GameCanStartStatusMessage gcsm) {
-
     }
 
     private void handleJoinAcceptMessage(JoinAcceptMessage jam) {
