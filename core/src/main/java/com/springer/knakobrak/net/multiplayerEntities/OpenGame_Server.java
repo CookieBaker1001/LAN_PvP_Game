@@ -32,6 +32,7 @@ public class OpenGame_Server implements Server {
     private PhysicsSimulation simulation;
 
     private float serverTime;
+    private long serverStartTime;
 
     public OpenGame_Server(int port, long hostKey) throws IOException {
         this.port = port;
@@ -43,8 +44,10 @@ public class OpenGame_Server implements Server {
         shutdownRequested = false;
         idPool = new IdPool();
         simulation = new PhysicsSimulation("Server");
+        simulation.wallGrid = LoadUtillities.loadLevel("levels/level1.txt");
 
         serverState = ServerState.GAME;
+        serverStartTime = System.currentTimeMillis();
     }
 
     @Override
@@ -71,7 +74,6 @@ public class OpenGame_Server implements Server {
     }
 
     private int secondCounter = 0;
-    private float elapsedTime = 0f;
     private float accumulator_1 = 0f;
     private float accumulator_5 = 0f;
 
@@ -84,7 +86,6 @@ public class OpenGame_Server implements Server {
     private void gameLoop() {
         while (running) {
             processServerMessages();
-            elapsedTime += SERVER_TICK_SPEED;
             accumulator_1 += SERVER_TICK_SPEED;
             accumulator_5 += SERVER_TICK_SPEED;
             broadCastAccumulator += SERVER_TICK_SPEED;
@@ -173,7 +174,9 @@ public class OpenGame_Server implements Server {
     }
 
     private void handleGetMapDataMessage(ClientHandler sender, GetMapDataMessage gmdm) {
-
+        MapDataMessage mdm = new MapDataMessage();
+        mdm.wallBits = simulation.wallGrid;
+        sender.send(mdm);
     }
 
     private void handleGetPlayerDataMessage(ClientHandler sender, GetPlayerDataMessage gpdm) {
@@ -185,16 +188,18 @@ public class OpenGame_Server implements Server {
         int i = 0;
         for (Player p : simulation.players.values()) {
             psm.ids[i] = p.id;
-            psm.x[i] = p.x;
-            psm.y[i] = p.y;
+            psm.x[i] = p.realX;
+            psm.y[i] = p.realY;
             i++;
         }
         sender.send(psm);
     }
 
+    // Method triggers once a client has loaded all resources and can enter the GameScreen
     private void handleAllResourcesLoadedMessage(ClientHandler sender, AllResourcesLoadedMessage arlm) {
         System.out.println("Handle all resources loaded message");
         AllResourcesLoadedAcknowledgedMessage arlam = new AllResourcesLoadedAcknowledgedMessage();
+        arlam.serverStartTime = serverStartTime;
         sender.send(arlam);
 
         Player p = new Player();
@@ -251,8 +256,8 @@ public class OpenGame_Server implements Server {
     private void handlePlayerWASDMessage(ClientHandler sender, PlayerWASDMessage pwasdm) {
         Player p = simulation.getPlayer(sender.id);
         if (p == null) return;
-        p.x = pwasdm.x;
-        p.y = pwasdm.y;
+        p.realX = pwasdm.x;
+        p.realY = pwasdm.y;
     }
 
     void handleChatMessage(ClientHandler sender, ChatMessage cm) {
@@ -275,17 +280,17 @@ public class OpenGame_Server implements Server {
         int i = 0;
         for (Player p : simulation.players.values()) {
             wsm.ids[i] = p.id;
-            wsm.x[i] = p.x;
-            wsm.y[i] = p.y;
+            wsm.x[i] = p.realX;
+            wsm.y[i] = p.realY;
             i++;
         }
         c++;
         if (c >= 20) {
             String st = "World state looks like this: ";
             for (Player p : simulation.players.values()) {
-                st += "ID: " + p.id + ", (" + p.x + "," + p.y + ")";
+                st += "ID: " + p.id + ", (" + p.realX + "," + p.realY + ")";
             }
-            System.out.println(st);
+            //System.out.println(st);
             c -= 20;
         }
         return wsm;

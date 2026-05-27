@@ -48,6 +48,8 @@ public class LanPvpGame extends Game {
     public int worldHeight;
     public int worldWidth;
 
+    public long gameStartTime;
+
     @Override
     public void create() {
         soundManager = new SoundManager();
@@ -94,7 +96,7 @@ public class LanPvpGame extends Game {
             }
         } catch (Exception e) {
             System.out.println("Client disconnected!");
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 
@@ -110,6 +112,7 @@ public class LanPvpGame extends Game {
         } finally {
             clientThread = null;
             client = null;
+            gameStartTime = 0;
         }
     }
 

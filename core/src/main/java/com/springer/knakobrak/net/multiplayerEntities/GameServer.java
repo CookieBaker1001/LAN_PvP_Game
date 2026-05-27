@@ -170,8 +170,8 @@ public class GameServer implements Runnable {
         for (Player p : simulation.players.values()) {
             if (p.body == null) continue;
             Vector2 pos = p.body.getPosition();
-            p.x = pos.x;
-            p.y = pos.y;
+            p.realX = pos.x;
+            p.realY = pos.y;
         }
 
 //        for (ProjectileState proj : simulation.projectiles.values()) {

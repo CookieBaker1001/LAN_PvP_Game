@@ -1,8 +1,8 @@
-package com.springer.knakobrak.util;
+package com.springer.knakobrak.world;
 
 public enum ObjectType {
     PLAYER,
     PROJECTILE,
     WALL,
-    POWERUP
+    POWER_UP
 }

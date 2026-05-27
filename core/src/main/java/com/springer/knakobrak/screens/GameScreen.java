@@ -78,6 +78,8 @@ public class GameScreen implements Screen, NetworkListener {
     private Table heartTable;
 
     private final Texture[] ping;
+    private Texture wallTexture;
+    private Texture spawnTexture;
 
     private PhysicsSimulation simulation;
     private Player player;
@@ -101,9 +103,12 @@ public class GameScreen implements Screen, NetworkListener {
 
         simulation = game.simulation;
         player = simulation.getPlayer(game.client.id);
-        System.out.println("Got player with id " + game.client.id + ", Status: " + (player == null ? "null" : ("("+player.x+","+player.y+")")));
+        System.out.println("Got player with id " + game.client.id + ", Status: " + (player == null ? "null" : ("("+player.realX +","+player.realY +")")));
         //game.soundManager.playMusic("game", true);
         //simulation.setSimulationOwner(this);
+
+        wallTexture = new Texture("tiles/wall.png");
+        spawnTexture = new Texture("tiles/spawn.png");
 
         messages = new Queue<>();
         tintedBG = uiSkin.newDrawable("white", 0, 0, 0, 0.5f);
@@ -115,6 +120,8 @@ public class GameScreen implements Screen, NetworkListener {
         for (Player ps : simulation.players.values()) {
             System.out.println(ps.body == null ? "Player body "+ps.id+" is null" : "Player body "+ps.id+" is not null");
         }
+
+        localTime = (System.currentTimeMillis() - game.gameStartTime) / 1000f;
     }
 
     @Override
@@ -164,26 +171,6 @@ public class GameScreen implements Screen, NetworkListener {
         pauseMenu = createPauseMenu();
         pauseMenuFrame.add(pauseMenu).pad(5);
 
-//        mainTable.add(new Table()).expand().fill().pad(50);
-//        mainTable.row();
-//
-//        chatLogLabel = new Label("", uiSkin);
-//        chatLogLabel.setWrap(true);
-//
-//        chatScroll = new ScrollPane(chatLogLabel, uiSkin);
-//        chatScroll.setFadeScrollBars(false);
-//
-//        chatInput = new TextField("", uiSkin);
-//        chatInput.setAlignment(1);
-//        chatInput.setVisible(false);
-//
-//        Table bottomBar = new Table();
-//
-//        bottomBar.add(chatInput).width(300).height(40).left().pad(5);
-//        bottomBar.add(chatLogLabel).width(500).height(120).right().pad(5);
-//
-//        mainTable.add(bottomBar).expandX().fillX().bottom().pad(10);
-
         consoleArea.setVisible(false);
         consoleArea_History.setVisible(true);
         pauseMenu.setVisible(false);
@@ -199,18 +186,19 @@ public class GameScreen implements Screen, NetworkListener {
         }
         deadPlayer = playerSkinsAttlas.findRegion("pDead");
 
-        mainTable.setDebug(true);
+        //mainTable.setDebug(true);
     }
 
     private Table createTopBar() {
         coordinatesLabel = new Label("x: 0.0, y: 0.0", uiSkin);
         coordinatesLabel.setFontScale(1.5f);
         timeLabel = new Label("Time: 0.0s", uiSkin);
+        timeLabel.setFontScale(1.25f);
         heartTable = createHealthBar(MAX_HEALTH, heartTexture);
 
         Table topBar = new Table();
         Table topLeft = new Table();
-        topLeft.add(coordinatesLabel);
+        topLeft.add(coordinatesLabel).padBottom(3f);
         topLeft.row();
         topLeft.add(timeLabel);
         topBar.add(topLeft).left().expandX();
@@ -428,11 +416,15 @@ public class GameScreen implements Screen, NetworkListener {
         Vector2 desiredVelocity = new Vector2(input.x, input.y)
             .nor()
             .scl(PLAYER_SPEED_MPS * delta);
-        player.x += desiredVelocity.x;
-        player.y += desiredVelocity.y;
+        player.realX += desiredVelocity.x;
+        player.realY += desiredVelocity.y;
+
+        player.lateX = player.realX;
+        player.lateY = player.realY;
+
         PlayerWASDMessage pwasdm = new PlayerWASDMessage();
-        pwasdm.x = player.x;
-        pwasdm.y = player.y;
+        pwasdm.x = player.realX;
+        pwasdm.y = player.realY;
         try {
             game.client.send(pwasdm);
         } catch (Exception e) {
@@ -442,8 +434,8 @@ public class GameScreen implements Screen, NetworkListener {
 
     private void moveCameraToPlayer() {
         if (player != null) {
-            float x = Constants.metersToPx(player.x);
-            float y = Constants.metersToPx(player.y);
+            float x = Constants.metersToPx(player.realX);
+            float y = Constants.metersToPx(player.realY);
             cam.position.set(x, y, 0);
         }
     }
@@ -458,6 +450,7 @@ public class GameScreen implements Screen, NetworkListener {
         moveCameraToPlayer();
         updateCoordinateLabel();
         updateTimeLabel();
+        interpolatePlayers();
 
         localTime += delta;
 
@@ -469,13 +462,22 @@ public class GameScreen implements Screen, NetworkListener {
         }
     }
 
+    private void interpolatePlayers() {
+        float t = 0.1f;
+        for (Player p : simulation.players.values()) {
+            if (p.id == game.client.id) continue;
+            p.lateX = MathUtils.lerp(p.lateX, p.realX, t);
+            p.lateY = MathUtils.lerp(p.lateY, p.realY, t);
+        }
+    }
+
     private void doSomethingEverySecond() {
         //System.out.println("Time: " + secondsCounter);
         //simulation.playerStates();
     }
 
     private void updateCoordinateLabel() {
-        coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", player.x, player.y));
+        coordinatesLabel.setText(String.format("x: %.1f, y: %.1f", player.realX, player.realY));
     }
 
     private void updateTimeLabel() {
@@ -494,12 +496,33 @@ public class GameScreen implements Screen, NetworkListener {
         batch.begin();
         batch.draw(background, PIXELS_PER_METER/2, PIXELS_PER_METER/2, (game.worldWidth-1) * PIXELS_PER_METER, (game.worldHeight-1) * PIXELS_PER_METER);
 
+        for (int i = 0; i < simulation.wallGrid.length; i++) {
+            for (int j = 0; j < simulation.wallGrid[0].length; j++) {
+                int w = simulation.wallGrid[i][j];
+                if (w == 1) {
+                    batch.draw(wallTexture, PIXELS_PER_METER * j, PIXELS_PER_METER * i, PIXELS_PER_METER, PIXELS_PER_METER);
+                }
+                if (w == 0) {
+                    continue;
+                }
+                if (w == 2) {
+                    batch.draw(spawnTexture, PIXELS_PER_METER * j, PIXELS_PER_METER * i, PIXELS_PER_METER, PIXELS_PER_METER);
+                }
+            }
+        }
+
         for (Player p : simulation.players.values()) {
+            if (p == player) continue;
             batch.draw(playerSkins.get(0),
-                Constants.metersToPx(p.x) - PLAYER_RADIUS_PX, Constants.metersToPx(p.y) - PLAYER_RADIUS_PX,
+                Constants.metersToPx(p.lateX) - PLAYER_RADIUS_PX, Constants.metersToPx(p.lateY) - PLAYER_RADIUS_PX,
                 PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
                 1f, 1f, 0);
         }
+
+        batch.draw(playerSkins.get(0),
+            Constants.metersToPx(player.realX) - PLAYER_RADIUS_PX, Constants.metersToPx(player.realY) - PLAYER_RADIUS_PX,
+            PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
+            1f, 1f, 0);
 
         batch.end();
         //drawGrid();
@@ -620,8 +643,10 @@ public class GameScreen implements Screen, NetworkListener {
                 simulation.addPlayer(p.id, p);
             }
             if (wsm.ids[i] == game.client.id) continue;
-            p.x = wsm.x[i];
-            p.y = wsm.y[i];
+//            p.x = wsm.x[i];
+//            p.y = wsm.y[i];
+            p.realX = wsm.x[i];
+            p.realY = wsm.y[i];
         }
         for (Player p : simulation.players.values()) {
             boolean found = false;

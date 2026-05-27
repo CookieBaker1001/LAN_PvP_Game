@@ -118,7 +118,7 @@ public class LoadingScreen implements Screen, NetworkListener {
     }
 
     private boolean receivedPlayerData = false;
-    private boolean receivedWorldData = true; // for now the world data is not needed
+    private boolean receivedWorldData = false;
     private void requestResources() {
         if (!receivedPlayerData) {
             game.client.send(new GetPlayerDataMessage());
@@ -160,7 +160,7 @@ public class LoadingScreen implements Screen, NetworkListener {
 
         switch (msg) {
             case PlayerStateMessage psm -> handlePlayerStateMessage(psm);
-            //case MapDataMessage wdm -> handleMapDataMessage(wdm);
+            case MapDataMessage wdm -> handleMapDataMessage(wdm);
             case AllResourcesLoadedAcknowledgedMessage arlam -> handleAllResourcesLoadedAcknowledgedMessage(arlam);
             default -> {
                 //System.out.println("Unknown message format: " + msg.getClass());
@@ -168,15 +168,24 @@ public class LoadingScreen implements Screen, NetworkListener {
         }
     }
 
+    private void handleMapDataMessage(MapDataMessage mdm) {
+        System.out.println("World data received");
+        simulation.wallGrid = mdm.wallBits;
+        game.worldHeight = mdm.wallBits.length;
+        game.worldWidth = mdm.wallBits[0].length;
+        receivedWorldData = true;
+    }
+
     private void handlePlayerStateMessage(PlayerStateMessage psm) {
+        System.out.println("Player data received");
         for (int i = 0; i < psm.x.length; i++) {
             Player p = simulation.getPlayer(i);
             if (p == null) {
                 p = new Player();
                 simulation.addPlayer(i, p);
             }
-            p.x = psm.x[i];
-            p.y = psm.y[i];
+            p.realX = psm.x[i];
+            p.realY = psm.y[i];
         }
         receivedPlayerData = true;
     }
@@ -207,6 +216,7 @@ public class LoadingScreen implements Screen, NetworkListener {
 //    }
 
     private void handleAllResourcesLoadedAcknowledgedMessage(AllResourcesLoadedAcknowledgedMessage arlam) {
+        game.gameStartTime = arlam.serverStartTime;
         game.setScreen(new GameScreen(game, batch, uiSkin, soundManager));
     }
 }

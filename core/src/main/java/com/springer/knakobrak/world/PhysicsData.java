@@ -1,7 +1,7 @@
-package com.springer.knakobrak.util;
+package com.springer.knakobrak.world;
 
 public class PhysicsData {
-    public final ObjectType type;
+    public ObjectType type;
     public int clientId;
     public int counter;
 

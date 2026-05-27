@@ -17,7 +17,8 @@ public class Player implements Serializable {
     public int ballIcon;
     public int hp = MAX_HEALTH;
     public boolean isDead = false;
-    public float x, y;
+    public float realX = 0, realY = 0;
+    public float lateX = realX, lateY = realY;
     public float deathTimer = 0f;
     public float invincibilityTimer = 0f;
     public boolean isInvincible = false;
@@ -54,6 +55,6 @@ public class Player implements Serializable {
 
     @Override
     public String toString () {
-        return "PlayerState{id=" + id + ", x=" + x + ", y=" + y + "}";
+        return "PlayerState{id=" + id + ", x=" + realX + ", y=" + realY + "}";
     }
 }
