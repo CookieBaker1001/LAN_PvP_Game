@@ -2,6 +2,7 @@ package com.springer.knakobrak.world;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
+import com.springer.knakobrak.util.LoadUtilities;
 
 import java.util.*;
 
@@ -16,6 +17,7 @@ public class PhysicsSimulation {
     public PhysicsSimulation(String owner) {
         this.owner = owner;
         players = new HashMap<>();
+        initWorld();
     }
 
     public void resetSimulation() {
@@ -41,12 +43,27 @@ public class PhysicsSimulation {
         });
     }
 
+    public void step(float delta, int a, int b) {
+        world.step(delta, a, b);
+        age(delta);
+    }
+
+    public void step(float delta) {
+        world.step(delta, 6, 2);
+        age(delta);
+    }
+
+    private void age(float delta) {
+
+    }
+
     private void handleCollision(PhysicsData a, PhysicsData b) {
         System.out.println("Collision detected between " + a.type + " and " + b.type);
     }
 
     public void addPlayer(int id, Player p) {
         players.put(id, p);
+        p.body = LoadUtilities.createPlayerBody(world, p.realX, p.realY, id);
         System.out.println(owner + ": New player added!");
     }
 
@@ -80,6 +97,8 @@ public class PhysicsSimulation {
 
     public void removePlayer(int id) {
         if (players == null || !players.containsKey(id)) return;
+        Player p = players.get(id);
+        world.destroyBody(p.body);
         players.remove(id);
     }
 

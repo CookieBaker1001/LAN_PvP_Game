@@ -12,6 +12,7 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.local.SoundManager;
 import com.springer.knakobrak.net.messages.*;
+import com.springer.knakobrak.util.LoadUtilities;
 import com.springer.knakobrak.world.PhysicsSimulation;
 import com.springer.knakobrak.world.Player;
 
@@ -157,7 +158,6 @@ public class LoadingScreen implements Screen, NetworkListener {
 
     @Override
     public void handleNetworkMessage(NetMessage msg) {
-
         switch (msg) {
             case PlayerStateMessage psm -> handlePlayerStateMessage(psm);
             case MapDataMessage wdm -> handleMapDataMessage(wdm);
@@ -168,6 +168,7 @@ public class LoadingScreen implements Screen, NetworkListener {
         }
     }
 
+    // Triggers when the client receives data about the terrain during loading.
     private void handleMapDataMessage(MapDataMessage mdm) {
         System.out.println("World data received");
         simulation.wallGrid = mdm.wallBits;
@@ -176,6 +177,7 @@ public class LoadingScreen implements Screen, NetworkListener {
         receivedWorldData = true;
     }
 
+    // Triggers when the client receives data about other players during loading.
     private void handlePlayerStateMessage(PlayerStateMessage psm) {
         System.out.println("Player data received");
         for (int i = 0; i < psm.x.length; i++) {
@@ -186,6 +188,7 @@ public class LoadingScreen implements Screen, NetworkListener {
             }
             p.realX = psm.x[i];
             p.realY = psm.y[i];
+            //p.body = LoadUtilities.createPlayerBody(simulation.world, p.realX, p.realY, p.id);
         }
         receivedPlayerData = true;
     }
@@ -198,7 +201,7 @@ public class LoadingScreen implements Screen, NetworkListener {
 //            w.y = wDTO.y;
 //            w.width = wDTO.width;
 //            w.height = wDTO.height;
-//            w.body = LoadUtillities.createWall(simulation.world, w.x, w.y, (int)w.height, (int)w.width);
+//            w.body = LoadUtilities.createWall(simulation.world, w.x, w.y, (int)w.height, (int)w.width);
 //            game.simulation.addWall(w);
 //        }
 //        System.out.println("Received wall bits!");
@@ -215,6 +218,7 @@ public class LoadingScreen implements Screen, NetworkListener {
 //        receivedWorldData = true;
 //    }
 
+    // Triggers when the server acknowledges the fact that the client is ready. Will promptly move onto the game screen.
     private void handleAllResourcesLoadedAcknowledgedMessage(AllResourcesLoadedAcknowledgedMessage arlam) {
         game.gameStartTime = arlam.serverStartTime;
         game.setScreen(new GameScreen(game, batch, uiSkin, soundManager));

@@ -1,5 +1,6 @@
 package com.springer.knakobrak.net.multiplayerEntities;
 
+import com.badlogic.gdx.math.Vector2;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.*;
 import com.springer.knakobrak.world.*;
@@ -11,6 +12,8 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+
+import static com.springer.knakobrak.util.Constants.PLAYER_SPEED_MPS;
 
 public class OpenGame_Server implements Server {
 
@@ -44,7 +47,7 @@ public class OpenGame_Server implements Server {
         shutdownRequested = false;
         idPool = new IdPool();
         simulation = new PhysicsSimulation("Server");
-        simulation.wallGrid = LoadUtillities.loadLevel("levels/level1.txt");
+        simulation.wallGrid = LoadUtilities.loadLevel("levels/level1.txt");
 
         serverState = ServerState.GAME;
         serverStartTime = System.currentTimeMillis();
@@ -86,6 +89,7 @@ public class OpenGame_Server implements Server {
     private void gameLoop() {
         while (running) {
             processServerMessages();
+            simulation.step(SERVER_TICK_SPEED, 6, 2);
             accumulator_1 += SERVER_TICK_SPEED;
             accumulator_5 += SERVER_TICK_SPEED;
             broadCastAccumulator += SERVER_TICK_SPEED;
@@ -244,7 +248,6 @@ public class OpenGame_Server implements Server {
         jam.serverType = serverType.ordinal();
         sender.send(jam);
         simulation.playerStates();
-        //broadcastPlayerList();
     }
 
     private void denyClientEntry(ClientHandler sender) {
@@ -256,8 +259,17 @@ public class OpenGame_Server implements Server {
     private void handlePlayerWASDMessage(ClientHandler sender, PlayerWASDMessage pwasdm) {
         Player p = simulation.getPlayer(sender.id);
         if (p == null) return;
-        p.realX = pwasdm.x;
-        p.realY = pwasdm.y;
+
+        //System.out.println("Input is: " + pwasdm.x + "," + pwasdm.y);
+        Vector2 desiredVelocity = new Vector2(pwasdm.x, pwasdm.y)
+            .nor()
+            .scl(PLAYER_SPEED_MPS);
+        p.body.setLinearVelocity(desiredVelocity);
+
+        p.realX = p.body.getPosition().x;
+        p.realY = p.body.getPosition().y;
+
+        //System.out.println("New position is: " + p.realX + "," + p.realY);
     }
 
     void handleChatMessage(ClientHandler sender, ChatMessage cm) {
@@ -290,7 +302,7 @@ public class OpenGame_Server implements Server {
             for (Player p : simulation.players.values()) {
                 st += "ID: " + p.id + ", (" + p.realX + "," + p.realY + ")";
             }
-            //System.out.println(st);
+            System.out.println(st);
             c -= 20;
         }
         return wsm;

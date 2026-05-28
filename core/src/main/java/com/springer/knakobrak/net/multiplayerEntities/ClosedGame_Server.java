@@ -48,7 +48,7 @@ public class ClosedGame_Server implements Server {
         shutdownRequested = false;
         idPool = new IdPool();
         simulation = new PhysicsSimulation("Server");
-        simulation.wallGrid = LoadUtillities.loadLevel("levels/level1.txt");
+        simulation.wallGrid = LoadUtilities.loadLevel("levels/level1.txt");
 
         serverState = ServerState.LOBBY;
         serverStartTime = System.currentTimeMillis();

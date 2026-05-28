@@ -322,6 +322,14 @@ public class GameScreen implements Screen, NetworkListener {
     public void render(float delta) {
         game.dispatchNetworkMessages();
         input(delta);
+        physicsAccumulator += delta;
+
+        while (physicsAccumulator >= FIXED_DT) {
+            simulation.step(FIXED_DT);
+            physicsAccumulator -= FIXED_DT;
+        }
+
+        interpolatePlayersPositions();
         logic(delta);
         draw(delta);
     }
@@ -413,18 +421,23 @@ public class GameScreen implements Screen, NetworkListener {
     }
 
     private void applyMovement(Vector2 input, float delta) {
+        //System.out.println("Input is: " + input.x + "," + input.y);
         Vector2 desiredVelocity = new Vector2(input.x, input.y)
             .nor()
-            .scl(PLAYER_SPEED_MPS * delta);
-        player.realX += desiredVelocity.x;
-        player.realY += desiredVelocity.y;
+            .scl(PLAYER_SPEED_MPS);
+        player.body.setLinearVelocity(desiredVelocity);
 
-        player.lateX = player.realX;
-        player.lateY = player.realY;
+        player.realX = player.body.getPosition().x;
+        player.realY = player.body.getPosition().y;
+
+        //System.out.println("New position is: " + player.realX + "," + player.realY);
+
+        player.graphicalX = player.realX;
+        player.graphicalY = player.realY;
 
         PlayerWASDMessage pwasdm = new PlayerWASDMessage();
-        pwasdm.x = player.realX;
-        pwasdm.y = player.realY;
+        pwasdm.x = input.x;
+        pwasdm.y = input.y;
         try {
             game.client.send(pwasdm);
         } catch (Exception e) {
@@ -450,7 +463,6 @@ public class GameScreen implements Screen, NetworkListener {
         moveCameraToPlayer();
         updateCoordinateLabel();
         updateTimeLabel();
-        interpolatePlayers();
 
         localTime += delta;
 
@@ -462,12 +474,27 @@ public class GameScreen implements Screen, NetworkListener {
         }
     }
 
-    private void interpolatePlayers() {
+    private void interpolatePlayersPositions() {
         float t = 0.1f;
         for (Player p : simulation.players.values()) {
             if (p.id == game.client.id) continue;
-            p.lateX = MathUtils.lerp(p.lateX, p.realX, t);
-            p.lateY = MathUtils.lerp(p.lateY, p.realY, t);
+//            p.lateX = MathUtils.lerp(p.lateX, p.realX, t);
+//            p.lateY = MathUtils.lerp(p.lateY, p.realY, t);
+
+            Vector2 target = new Vector2(p.realX, p.realY);
+            Vector2 direction = target.cpy().sub(p.body.getPosition());
+            direction.nor().scl(PLAYER_SPEED_MPS);
+
+//            Vector2 desiredVelocity = new Vector2(input.x, input.y)
+//                .nor()
+//                .scl(PLAYER_SPEED_MPS);
+            p.body.setLinearVelocity(direction);
+
+            p.graphicalX = p.body.getPosition().x;
+            p.graphicalY = p.body.getPosition().y;
+
+//            p.realX = p.body.getPosition().x;
+//            p.realY = p.body.getPosition().y;
         }
     }
 
@@ -485,8 +512,6 @@ public class GameScreen implements Screen, NetworkListener {
     }
 
     private void draw(float delta) {
-        //ScreenUtils.clear(Color.BLACK);
-
         Gdx.gl.glClearColor(0.2f, 0.15f, 0.2f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
@@ -512,17 +537,17 @@ public class GameScreen implements Screen, NetworkListener {
         }
 
         for (Player p : simulation.players.values()) {
-            if (p == player) continue;
+            //if (p == player) continue;
             batch.draw(playerSkins.get(0),
-                Constants.metersToPx(p.lateX) - PLAYER_RADIUS_PX, Constants.metersToPx(p.lateY) - PLAYER_RADIUS_PX,
+                Constants.metersToPx(p.graphicalX) - PLAYER_RADIUS_PX, Constants.metersToPx(p.graphicalY) - PLAYER_RADIUS_PX,
                 PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
                 1f, 1f, 0);
         }
 
-        batch.draw(playerSkins.get(0),
-            Constants.metersToPx(player.realX) - PLAYER_RADIUS_PX, Constants.metersToPx(player.realY) - PLAYER_RADIUS_PX,
-            PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
-            1f, 1f, 0);
+//        batch.draw(playerSkins.get(0),
+//            Constants.metersToPx(player.graphicalX) - PLAYER_RADIUS_PX, Constants.metersToPx(player.graphicalY) - PLAYER_RADIUS_PX,
+//            PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
+//            1f, 1f, 0);
 
         batch.end();
         //drawGrid();
@@ -569,14 +594,8 @@ public class GameScreen implements Screen, NetworkListener {
         background.dispose();
     }
 
-    int c = 0;
     @Override
     public void handleNetworkMessage(NetMessage msg) {
-        c++;
-        if (c >= 20) {
-            System.out.println("Type of message: " + msg.getClass().getSimpleName());
-            c -= 20;
-        }
         switch (msg) {
             case WorldStateMessage wsm -> handleWorldStateMessage(wsm);
             case ChatMessage cm -> handleChatMessage(cm);
@@ -584,7 +603,7 @@ public class GameScreen implements Screen, NetworkListener {
             case PlayerListMessage plm -> handlePlayerListMessage(plm);
             case PingMessage pm -> handlePingMessage(pm);
             default -> {
-                //System.out.println("Unknown message format: " + msg.getClass());
+                System.out.println("Unknown message format: " + msg.getClass());
             }
         }
     }
@@ -602,9 +621,7 @@ public class GameScreen implements Screen, NetworkListener {
         Label header = new Label("- Players -", uiSkin);
         membersTable.add(header).pad(10);
         membersTable.row();
-        //System.out.println("Ping");
         for (int i = 0; i < plm.ids.length; i++) {
-            //System.out.println(plm.ids[i] + ": " + plm.pings[i]);
             Label playerLabel = new Label("(" + plm.ids[i] + ") " + (plm.ids[i] == plm.hostId ? "(host) " : "") + plm.names[i], uiSkin);
             playerLabel.setFontScale(1f);
             Table row = new Table();
@@ -615,7 +632,6 @@ public class GameScreen implements Screen, NetworkListener {
             membersTable.add(row).expandX().fillX().pad(1);
             membersTable.row();
         }
-        //System.out.println("End of Ping");
         Gdx.app.postRunnable(() -> {
             membersScroll.layout();
             membersScroll.setScrollPercentY(1f);
@@ -633,18 +649,18 @@ public class GameScreen implements Screen, NetworkListener {
         return pingImage;
     }
 
-    float counter = 0f;
     private void handleWorldStateMessage(WorldStateMessage wsm) {
+        System.out.println("Receiving world state message!");
         for (int i = 0; i < wsm.x.length; i++) {
             Player p = simulation.getPlayer(wsm.ids[i]);
+            System.out.println("1");
             if (p == null) {
+                System.out.println("I added a new player here!");
                 p = new Player();
                 p.id = wsm.ids[i];
                 simulation.addPlayer(p.id, p);
             }
             if (wsm.ids[i] == game.client.id) continue;
-//            p.x = wsm.x[i];
-//            p.y = wsm.y[i];
             p.realX = wsm.x[i];
             p.realY = wsm.y[i];
         }
@@ -657,6 +673,7 @@ public class GameScreen implements Screen, NetworkListener {
                 }
             }
             if (!found) {
+                System.out.println("I removed a player here!");
                 simulation.removePlayer(p.id);
             }
         }

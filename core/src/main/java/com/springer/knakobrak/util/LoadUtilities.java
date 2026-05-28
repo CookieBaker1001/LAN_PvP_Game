@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import static com.springer.knakobrak.util.Constants.*;
 
-public class LoadUtillities {
+public class LoadUtilities {
 
     public static Body createPlayerBody(World world, float x, float y, int playerId) {
         BodyDef bd = new BodyDef();
@@ -157,7 +157,7 @@ public class LoadUtillities {
 //        float centerY = (y + h / 2f);
 //
 //        Wall wall = new Wall();
-//        wall.body = LoadUtillities.createWall(world, centerX, centerY, h, w);
+//        wall.body = LoadUtilities.createWall(world, centerX, centerY, h, w);
 //        wall.x = wall.body.getPosition().x;
 //        wall.y = wall.body.getPosition().y;
 //        wall.height = h;
@@ -241,7 +241,7 @@ public class LoadUtillities {
 //                    }
 //                }
 //
-//                walls.add(LoadUtillities.createMergedWall(world, x, y, width, height));
+//                walls.add(LoadUtilities.createMergedWall(world, x, y, width, height));
 //            }
 //        }
 //        return walls;

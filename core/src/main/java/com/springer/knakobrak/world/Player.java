@@ -18,7 +18,7 @@ public class Player implements Serializable {
     public int hp = MAX_HEALTH;
     public boolean isDead = false;
     public float realX = 0, realY = 0;
-    public float lateX = realX, lateY = realY;
+    public float graphicalX = realX, graphicalY = realY;
     public float deathTimer = 0f;
     public float invincibilityTimer = 0f;
     public boolean isInvincible = false;
