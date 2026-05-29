@@ -90,9 +90,11 @@ public class OpenGame_Server implements Server {
         while (running) {
             processServerMessages();
             simulation.step(SERVER_TICK_SPEED, 6, 2);
+
             accumulator_1 += SERVER_TICK_SPEED;
             accumulator_5 += SERVER_TICK_SPEED;
             broadCastAccumulator += SERVER_TICK_SPEED;
+
             if (accumulator_1 >= 1f) {
                 accumulator_1 -= 1f;
                 secondCounter++;

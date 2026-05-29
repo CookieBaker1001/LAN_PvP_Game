@@ -10,6 +10,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.actions.Actions;
@@ -26,6 +27,7 @@ import com.springer.knakobrak.LanPvpGame;
 import com.springer.knakobrak.local.SoundManager;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.Constants;
+import com.springer.knakobrak.util.LoadUtilities;
 import com.springer.knakobrak.util.PingThresholds;
 import com.springer.knakobrak.world.*;
 
@@ -374,6 +376,7 @@ public class GameScreen implements Screen, NetworkListener {
         }
     }
 
+    private int nextProjectileId = 0;
     private void input(float delta) {
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             if (chatMode) {
@@ -397,7 +400,7 @@ public class GameScreen implements Screen, NetworkListener {
 
         if (paused) return;
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
-            //handleFire();
+            handleFire();
         }
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
@@ -420,8 +423,70 @@ public class GameScreen implements Screen, NetworkListener {
         return input;
     }
 
+    private void handleFire() {
+        Vector2 angle = new Vector2();
+
+        if (!rotateCameraMode) {
+            Vector3 mouse = new Vector3(
+                Gdx.input.getX(),
+                Gdx.input.getY(),
+                0
+            );
+
+            worldViewPort.unproject(mouse);
+
+            angle.x = mouse.x - Constants.metersToPx(player.realX);
+            angle.y = mouse.y - Constants.metersToPx(player.realY);
+
+            float len = (float)Math.sqrt(angle.x * angle.x + angle.y * angle.y);
+            if (len == 0) return;
+
+            angle.x /= len;
+            angle.y /= len;
+        } else {
+            angle.x = MathUtils.sin(camAngleRad);
+            angle.y = MathUtils.cos(camAngleRad);
+        }
+
+        Projectile p = spawnLocalProjectile(angle.x, angle.y);
+        simulation.addProjectile(new ProjectileId(game.client.id, nextProjectileId), p);
+
+        SpawnProjectileMessage spm = new SpawnProjectileMessage();
+        spm.ownerId = player.id;
+        spm.counter = nextProjectileId;
+        spm.dx = angle.x;
+        spm.dy = angle.y;
+        game.client.send(spm);
+
+        nextProjectileId++;
+    }
+
+    private Projectile spawnLocalProjectile(float dx, float dy) {
+        Projectile p = new Projectile();
+        p.clientId = player.id;
+        p.counter = nextProjectileId;
+        Vector2 dir = new Vector2(dx, dy).nor();
+
+        Vector2 spawnPos = player.body.getPosition()
+            .cpy()
+            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+
+        p.body = LoadUtilities.createProjectile(
+            simulation.world,
+            spawnPos.x,
+            spawnPos.y,
+            p.clientId,
+            p.counter
+        );
+
+        p.body.setLinearVelocity(
+            dir.scl(BULLET_SPEED_MPS)
+        );
+
+        return p;
+    }
+
     private void applyMovement(Vector2 input, float delta) {
-        //System.out.println("Input is: " + input.x + "," + input.y);
         Vector2 desiredVelocity = new Vector2(input.x, input.y)
             .nor()
             .scl(PLAYER_SPEED_MPS);
@@ -429,8 +494,6 @@ public class GameScreen implements Screen, NetworkListener {
 
         player.realX = player.body.getPosition().x;
         player.realY = player.body.getPosition().y;
-
-        //System.out.println("New position is: " + player.realX + "," + player.realY);
 
         player.graphicalX = player.realX;
         player.graphicalY = player.realY;
@@ -544,6 +607,10 @@ public class GameScreen implements Screen, NetworkListener {
                 1f, 1f, 0);
         }
 
+        for (Projectile p : simulation.projectiles.values()) {
+            batch.draw(ballSkins.get(p.clientId), Constants.metersToPx(p.x) - BULLET_RADIUS_PX, Constants.metersToPx(p.y) - BULLET_RADIUS_PX, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
+        }
+
 //        batch.draw(playerSkins.get(0),
 //            Constants.metersToPx(player.graphicalX) - PLAYER_RADIUS_PX, Constants.metersToPx(player.graphicalY) - PLAYER_RADIUS_PX,
 //            PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
@@ -650,12 +717,9 @@ public class GameScreen implements Screen, NetworkListener {
     }
 
     private void handleWorldStateMessage(WorldStateMessage wsm) {
-        System.out.println("Receiving world state message!");
         for (int i = 0; i < wsm.x.length; i++) {
             Player p = simulation.getPlayer(wsm.ids[i]);
-            System.out.println("1");
             if (p == null) {
-                System.out.println("I added a new player here!");
                 p = new Player();
                 p.id = wsm.ids[i];
                 simulation.addPlayer(p.id, p);
@@ -673,7 +737,6 @@ public class GameScreen implements Screen, NetworkListener {
                 }
             }
             if (!found) {
-                System.out.println("I removed a player here!");
                 simulation.removePlayer(p.id);
             }
         }

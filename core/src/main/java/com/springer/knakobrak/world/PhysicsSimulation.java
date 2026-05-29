@@ -10,6 +10,8 @@ public class PhysicsSimulation {
 
     public String owner;
     public Map<Integer, Player> players;
+    public Map<ProjectileId, Projectile> projectiles;
+
     public int[][] wallGrid;
 
     public World world;
@@ -17,11 +19,13 @@ public class PhysicsSimulation {
     public PhysicsSimulation(String owner) {
         this.owner = owner;
         players = new HashMap<>();
+        projectiles = new HashMap<>();
         initWorld();
     }
 
     public void resetSimulation() {
         players.clear();
+        projectiles.clear();
     }
 
     public void initWorld() {
@@ -54,7 +58,28 @@ public class PhysicsSimulation {
     }
 
     private void age(float delta) {
+        for (Projectile ps : projectiles.values()) {
+            ps.x = ps.body.getPosition().x;
+            ps.y = ps.body.getPosition().y;
+            ps.lifeTime += delta;
+            if (ps.lifeTime >= ps.lifeTimeLimit || !ps.isAlive || Math.abs(ps.x) > 500 || Math.abs(ps.y) > 500) {
+                ps.isAlive = false;
+            }
+        }
+        removeOldProjectiles();
+    }
 
+    private void removeOldProjectiles() {
+        Iterator<Map.Entry<ProjectileId, Projectile>> it = projectiles.entrySet().iterator();
+
+        while (it.hasNext()) {
+            Map.Entry<ProjectileId, Projectile> entry = it.next();
+
+            if (!entry.getValue().isAlive) {
+                it.remove();
+                world.destroyBody(entry.getValue().body);
+            }
+        }
     }
 
     private void handleCollision(PhysicsData a, PhysicsData b) {
@@ -65,6 +90,10 @@ public class PhysicsSimulation {
         players.put(id, p);
         p.body = LoadUtilities.createPlayerBody(world, p.realX, p.realY, id);
         System.out.println(owner + ": New player added!");
+    }
+
+    public void addProjectile(ProjectileId id, Projectile p) {
+        projectiles.put(id, p);
     }
 
     public void printWallGrid() {
@@ -100,6 +129,13 @@ public class PhysicsSimulation {
         Player p = players.get(id);
         world.destroyBody(p.body);
         players.remove(id);
+    }
+
+    public void removeProjectile(ProjectileId id) {
+        if (projectiles == null || !projectiles.containsKey(id)) return;
+        Projectile p = projectiles.get(id);
+        world.destroyBody(p.body);
+        projectiles.remove(id);
     }
 
     public void closeSimulation() {
