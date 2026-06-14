@@ -87,6 +87,7 @@ public class GameScreen implements Screen, NetworkListener {
     private Player player;
     private Map<Integer, TextureRegion> playerSkins = new HashMap<>();
     private Map<Integer, Texture> ballSkins = new HashMap<>();
+    private Texture ballSkin;
 
     private float localTime = 0f;
 
@@ -105,7 +106,12 @@ public class GameScreen implements Screen, NetworkListener {
 
         simulation = game.simulation;
         player = simulation.getPlayer(game.client.id);
-        System.out.println("Got player with id " + game.client.id + ", Status: " + (player == null ? "null" : ("("+player.realX +","+player.realY +")")));
+        player.id = game.client.id;
+//        player.graphicalX = Constants.metersToPx(player.realX);
+//        player.graphicalY = Constants.metersToPx(player.realY);
+        System.out.println("Player has startPOS: (" + player.realX + "," + player.realY + ")");
+        System.out.println("Player has body startPOS: (" + player.body.getPosition().x + "," + player.body.getPosition().y + ")");
+        //System.out.println("Got player with id " + game.client.id + ", Status: " + (player == null ? "null" : ("("+player.realX +","+player.realY +")")));
         //game.soundManager.playMusic("game", true);
         //simulation.setSimulationOwner(this);
 
@@ -186,6 +192,7 @@ public class GameScreen implements Screen, NetworkListener {
             ballSkins.put(i, new Texture("balls/b" + ps.ballIcon + ".png"));
             i++;
         }
+        ballSkin = new Texture("balls/b0.png");
         deadPlayer = playerSkinsAttlas.findRegion("pDead");
 
         //mainTable.setDebug(true);
@@ -448,8 +455,10 @@ public class GameScreen implements Screen, NetworkListener {
             angle.y = MathUtils.cos(camAngleRad);
         }
 
-        Projectile p = spawnLocalProjectile(angle.x, angle.y);
+        Projectile p = spawnLocalProjectile(player.id, nextProjectileId, angle.x, angle.y);
         simulation.addProjectile(new ProjectileId(game.client.id, nextProjectileId), p);
+
+        System.out.println("Own projectile spawned!");
 
         SpawnProjectileMessage spm = new SpawnProjectileMessage();
         spm.ownerId = player.id;
@@ -461,15 +470,22 @@ public class GameScreen implements Screen, NetworkListener {
         nextProjectileId++;
     }
 
-    private Projectile spawnLocalProjectile(float dx, float dy) {
+    private Projectile spawnLocalProjectile(int playerId, int projectileId, float dx, float dy) {
         Projectile p = new Projectile();
-        p.clientId = player.id;
-        p.counter = nextProjectileId;
+        p.clientId = playerId;
+        p.counter = projectileId;
         Vector2 dir = new Vector2(dx, dy).nor();
 
-        Vector2 spawnPos = player.body.getPosition()
-            .cpy()
-            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+        Vector2 spawnPos;
+        if (playerId == player.id) {
+            spawnPos = player.body.getPosition()
+                .cpy()
+                .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+        } else {
+            spawnPos = simulation.getPlayer(playerId).body.getPosition()
+                .cpy()
+                .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+        }
 
         p.body = LoadUtilities.createProjectile(
             simulation.world,
@@ -541,23 +557,15 @@ public class GameScreen implements Screen, NetworkListener {
         float t = 0.1f;
         for (Player p : simulation.players.values()) {
             if (p.id == game.client.id) continue;
-//            p.lateX = MathUtils.lerp(p.lateX, p.realX, t);
-//            p.lateY = MathUtils.lerp(p.lateY, p.realY, t);
 
             Vector2 target = new Vector2(p.realX, p.realY);
             Vector2 direction = target.cpy().sub(p.body.getPosition());
             direction.nor().scl(PLAYER_SPEED_MPS);
 
-//            Vector2 desiredVelocity = new Vector2(input.x, input.y)
-//                .nor()
-//                .scl(PLAYER_SPEED_MPS);
             p.body.setLinearVelocity(direction);
 
             p.graphicalX = p.body.getPosition().x;
             p.graphicalY = p.body.getPosition().y;
-
-//            p.realX = p.body.getPosition().x;
-//            p.realY = p.body.getPosition().y;
         }
     }
 
@@ -600,7 +608,6 @@ public class GameScreen implements Screen, NetworkListener {
         }
 
         for (Player p : simulation.players.values()) {
-            //if (p == player) continue;
             batch.draw(playerSkins.get(0),
                 Constants.metersToPx(p.graphicalX) - PLAYER_RADIUS_PX, Constants.metersToPx(p.graphicalY) - PLAYER_RADIUS_PX,
                 PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
@@ -608,13 +615,9 @@ public class GameScreen implements Screen, NetworkListener {
         }
 
         for (Projectile p : simulation.projectiles.values()) {
-            batch.draw(ballSkins.get(p.clientId), Constants.metersToPx(p.x) - BULLET_RADIUS_PX, Constants.metersToPx(p.y) - BULLET_RADIUS_PX, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
+            //batch.draw(ballSkins.get(p.clientId), Constants.metersToPx(p.x) - BULLET_RADIUS_PX, Constants.metersToPx(p.y) - BULLET_RADIUS_PX, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
+            batch.draw(ballSkin, Constants.metersToPx(p.x) - BULLET_RADIUS_PX, Constants.metersToPx(p.y) - BULLET_RADIUS_PX, BULLET_RADIUS_PX*2, BULLET_RADIUS_PX*2);
         }
-
-//        batch.draw(playerSkins.get(0),
-//            Constants.metersToPx(player.graphicalX) - PLAYER_RADIUS_PX, Constants.metersToPx(player.graphicalY) - PLAYER_RADIUS_PX,
-//            PLAYER_RADIUS_PX, PLAYER_RADIUS_PX, PLAYER_RADIUS_PX*2, PLAYER_RADIUS_PX*2,
-//            1f, 1f, 0);
 
         batch.end();
         //drawGrid();
@@ -665,6 +668,7 @@ public class GameScreen implements Screen, NetworkListener {
     public void handleNetworkMessage(NetMessage msg) {
         switch (msg) {
             case WorldStateMessage wsm -> handleWorldStateMessage(wsm);
+            case SpawnProjectileMessage spm -> handleSpawnProjectileMessage(spm);
             case ChatMessage cm -> handleChatMessage(cm);
             case LeaveAcceptMessage lam -> handleLeaveAcceptMessage(lam);
             case PlayerListMessage plm -> handlePlayerListMessage(plm);
@@ -673,6 +677,16 @@ public class GameScreen implements Screen, NetworkListener {
                 System.out.println("Unknown message format: " + msg.getClass());
             }
         }
+    }
+
+    private void handleSpawnProjectileMessage(SpawnProjectileMessage spm) {
+        if (spm.ownerId == game.client.id) {
+            System.out.println("spm.ownerID: " + spm.ownerId + ", game.client.id: " + game.client.id);
+            return;
+        }
+        Projectile p = spawnLocalProjectile(spm.ownerId, spm.counter, spm.dx, spm.dy);
+        simulation.addProjectile(new ProjectileId(spm.ownerId, spm.counter), p);
+        System.out.println("Alien projectile spawned!");
     }
 
     private void handlePingMessage(PingMessage pm) {

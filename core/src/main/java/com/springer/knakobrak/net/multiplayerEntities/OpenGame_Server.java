@@ -1,6 +1,7 @@
 package com.springer.knakobrak.net.multiplayerEntities;
 
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
 import com.springer.knakobrak.net.messages.*;
 import com.springer.knakobrak.util.*;
 import com.springer.knakobrak.world.*;
@@ -8,12 +9,14 @@ import com.springer.knakobrak.world.*;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import static com.springer.knakobrak.util.Constants.PLAYER_SPEED_MPS;
+import static com.springer.knakobrak.util.Constants.*;
 
 public class OpenGame_Server implements Server {
 
@@ -33,6 +36,7 @@ public class OpenGame_Server implements Server {
     private final BlockingQueue<ServerMessage> inbox = new LinkedBlockingQueue<>();
 
     private PhysicsSimulation simulation;
+    private ArrayList<Vector2> spawnPositions;
 
     private float serverTime;
     private long serverStartTime;
@@ -48,6 +52,7 @@ public class OpenGame_Server implements Server {
         idPool = new IdPool();
         simulation = new PhysicsSimulation("Server");
         simulation.wallGrid = LoadUtilities.loadLevel("levels/level1.txt");
+        spawnPositions = LoadUtilities.getPlayerSpawnPoints(simulation.wallGrid);
 
         serverState = ServerState.GAME;
         serverStartTime = System.currentTimeMillis();
@@ -148,6 +153,7 @@ public class OpenGame_Server implements Server {
     private void dispatchMessage(ClientHandler sender, NetMessage msg) {
         switch (msg) {
             case PlayerWASDMessage pwasdm -> handlePlayerWASDMessage(sender, pwasdm);
+            case SpawnProjectileMessage spm -> handleSpawnProjectileMessage(sender, spm);
             case ChatMessage cm -> handleChatMessage(sender, cm);
             case JoinMessage jm -> handleJoinMessage(sender, jm);
             case LeaveGameMessage lgm -> handleLeaveGameMessage(sender, lgm);
@@ -159,6 +165,37 @@ public class OpenGame_Server implements Server {
                 System.out.println("Unknown message format: " + msg.getClass());
             }
         }
+    }
+
+    private void handleSpawnProjectileMessage(ClientHandler sender, SpawnProjectileMessage spm) {
+        broadcast(spm);
+        Projectile p = spawnLocalProjectile(spm.ownerId, spm.counter, spm.dx, spm.dy);
+        simulation.addProjectile(new ProjectileId(spm.ownerId, spm.counter), p);
+    }
+
+    private Projectile spawnLocalProjectile(int playerId, int projectileId, float dx, float dy) {
+        Projectile p = new Projectile();
+        p.clientId = playerId;
+        p.counter = projectileId;
+        Vector2 dir = new Vector2(dx, dy).nor();
+
+        Vector2 spawnPos = simulation.getPlayer(playerId).body.getPosition()
+            .cpy()
+            .add(dir.scl(BULLET_SPAWN_OFFSET_M));
+
+        p.body = LoadUtilities.createProjectile(
+            simulation.world,
+            spawnPos.x,
+            spawnPos.y,
+            p.clientId,
+            p.counter
+        );
+
+        p.body.setLinearVelocity(
+            dir.scl(BULLET_SPEED_MPS)
+        );
+
+        return p;
     }
 
     private void handlePingResponseMessage(ClientHandler sender, PingResponseMessage prm) {
@@ -206,10 +243,16 @@ public class OpenGame_Server implements Server {
         System.out.println("Handle all resources loaded message");
         AllResourcesLoadedAcknowledgedMessage arlam = new AllResourcesLoadedAcknowledgedMessage();
         arlam.serverStartTime = serverStartTime;
+//        Random r = new Random();
+//        Vector2 startPos = spawnPositions.get(r.nextInt(0, spawnPositions.size()));
+//        arlam.x = startPos.x;
+//        arlam.y = startPos.y;
         sender.send(arlam);
 
         Player p = new Player();
         p.id = sender.id;
+//        p.realX = startPos.x;
+//        p.realY = startPos.y;
         simulation.addPlayer(sender.id, p);
 
         ChatMessage cm = new ChatMessage();
@@ -225,7 +268,7 @@ public class OpenGame_Server implements Server {
 
     private void handleJoinMessage(ClientHandler sender, JoinMessage jm) {
         System.out.println(jm.username + " (v." + jm.protocolVersion + ") just joined!");
-        simulation.playerStates();
+        //simulation.playerStates();
         int id = idPool.acquire();
         if (id == -1) {
             denyClientEntry(sender);
@@ -249,7 +292,7 @@ public class OpenGame_Server implements Server {
         jam.isHost = sender.isHost;
         jam.serverType = serverType.ordinal();
         sender.send(jam);
-        simulation.playerStates();
+        //simulation.playerStates();
     }
 
     private void denyClientEntry(ClientHandler sender) {
@@ -298,15 +341,15 @@ public class OpenGame_Server implements Server {
             wsm.y[i] = p.realY;
             i++;
         }
-        c++;
-        if (c >= 20) {
-            String st = "World state looks like this: ";
-            for (Player p : simulation.players.values()) {
-                st += "ID: " + p.id + ", (" + p.realX + "," + p.realY + ")";
-            }
-            System.out.println(st);
-            c -= 20;
-        }
+//        c++;
+//        if (c >= 20) {
+//            String st = "World state looks like this: ";
+//            for (Player p : simulation.players.values()) {
+//                st += "ID: " + p.id + ", (" + p.realX + "," + p.realY + ")";
+//            }
+//            System.out.println(st);
+//            c -= 20;
+//        }
         return wsm;
     }
 

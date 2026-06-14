@@ -6,6 +6,7 @@ package com.springer.knakobrak.net.messages;
 public class AllResourcesLoadedAcknowledgedMessage extends NetMessage {
 
     public long serverStartTime;
+    public float x = 0, y = 0;
 
     public AllResourcesLoadedAcknowledgedMessage() {}
 }

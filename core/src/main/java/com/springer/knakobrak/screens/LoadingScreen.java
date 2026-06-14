@@ -184,11 +184,14 @@ public class LoadingScreen implements Screen, NetworkListener {
             Player p = simulation.getPlayer(i);
             if (p == null) {
                 p = new Player();
+                p.id = psm.ids[i];
+                p.realX = psm.x[i];
+                p.realY = psm.y[i];
                 simulation.addPlayer(i, p);
+                continue;
             }
             p.realX = psm.x[i];
             p.realY = psm.y[i];
-            //p.body = LoadUtilities.createPlayerBody(simulation.world, p.realX, p.realY, p.id);
         }
         receivedPlayerData = true;
     }
@@ -221,6 +224,13 @@ public class LoadingScreen implements Screen, NetworkListener {
     // Triggers when the server acknowledges the fact that the client is ready. Will promptly move onto the game screen.
     private void handleAllResourcesLoadedAcknowledgedMessage(AllResourcesLoadedAcknowledgedMessage arlam) {
         game.gameStartTime = arlam.serverStartTime;
+        setStartPosition(arlam.x, arlam.y);
         game.setScreen(new GameScreen(game, batch, uiSkin, soundManager));
+    }
+
+    private void setStartPosition(float x, float y) {
+        Player p = simulation.getPlayer(game.client.id);
+        p.realX = x;
+        p.realY = y;
     }
 }

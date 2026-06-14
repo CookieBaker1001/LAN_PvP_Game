@@ -35,8 +35,8 @@ public class LanPvpGame extends Game {
     public int id;
     public String username;
 
-    public int playerIcon;
-    public int ballIcon;
+    public int playerIcon = 0;
+    public int ballIcon = 0;
 
     private long randomHostKey = -1;
 

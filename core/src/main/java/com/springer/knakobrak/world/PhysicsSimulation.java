@@ -88,6 +88,7 @@ public class PhysicsSimulation {
 
     public void addPlayer(int id, Player p) {
         players.put(id, p);
+        p.id = id;
         p.body = LoadUtilities.createPlayerBody(world, p.realX, p.realY, id);
         System.out.println(owner + ": New player added!");
     }
